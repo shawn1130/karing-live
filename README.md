@@ -203,6 +203,34 @@ Good to know:
 - **When it is called.** Not for a call taken off the board after two hours, nor for a call that ended while the board was disconnected. A call that comes back on the board and ends again is reported again.
 - **Changing the function** does not reconnect: the latest one you pass is used.
 
+## Listening to a call
+
+`useCall(callId)` connects to one live call. Pass `null` to connect to nothing.
+
+```ts
+const call = useCall(callId);
+call.playAudio(); // from a click
+call.stopAudio();
+call.speaking; // { caller: boolean, agent: boolean }
+call.ended; // true once the call is over
+```
+
+- **Start audio from a click.** Browsers only allow sound after the user clicks or presses a key, so call `playAudio()` from an event handler.
+- **Audio flows only while it is on.** With the audio off, an open `useCall` still holds one connection and receives small speaking events, but no audio.
+- **If the audio pauses** (for example, a phone call takes over the device), `call.playAudio()` from another click resumes it.
+- **iPhone.** While audio plays, the package asks Safari to play it as media, so the ring/silent switch does not mute it (iOS 17 and later). The page's own setting comes back when the last call stops playing.
+- **Phone quality.** Both sides are mixed into one channel at 8 kHz, which is everything heard on a phone call.
+
+## Live transcripts
+
+Turn on the transcript with `useCall(callId, { transcript: true })`. You can switch it on and off without reconnecting.
+
+`call.transcript` is a list of `TranscriptLine` (`{ who, text, final }`), oldest first, in speaking order:
+
+- A line with `final: false` is a live caption. It keeps its place and changes as the words come in, until it is settled with `final: true`. Style captions differently if you like, for example dimmed.
+- The transcript covers what was said while connected: after a reconnect, words spoken during the gap are missing. Switching the transcript off drops any unfinished caption.
+- It keeps the last 500 lines.
+
 ## Without React
 
 The same features as plain TypeScript, for Vue, Svelte, Angular or no framework at all.
@@ -414,7 +442,7 @@ Everything from `@karing-ai/live` is also exported here.
 
 The package wraps two WebSocket endpoints. You do not need them directly, but they are typed here as `BoardEvent`, `ListenEvent` and `ListenCommand` if you want to:
 
-- `wss://api.karing.ai/live-calls`: the board. A `snapshot`, then `call.upsert` and `call.removed`.
+- `wss://api.karing.ai/live-calls`: the board. A `snapshot`, then `call.upsert` and `call.removed`, which carries `outcome` and `transferredTo` when a call ended.
 - `wss://api.karing.ai/live-calls/{callId}/listen`: one call. Speaking events, transcript lines, and G.711 mu-law audio at 8 kHz, mono, in binary messages, once switched on.
 
 Send the token as the second subprotocol, after `karing-live`: `new WebSocket(url, ["karing-live", token])`. Never put it in the URL, which servers and proxies write to their logs. Karing answers with `karing-live`. A token in the URL is refused.
