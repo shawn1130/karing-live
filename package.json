@@ -1,7 +1,7 @@
 {
   "name": "@karing-ai/live",
   "version": "0.1.0",
-  "private": true,
+  "private": false,
   "description": "Live calls in your web app: a live call board, call audio and live transcripts from Karing, with full TypeScript types.",
   "keywords": [
     "karing",
@@ -11,7 +11,7 @@
     "react",
     "websocket"
   ],
-  "license": "UNLICENSED",
+  "license": "MIT",
   "type": "module",
   "sideEffects": false,
   "exports": {
@@ -30,7 +30,8 @@
   },
   "files": [
     "dist",
-    "README.md"
+    "README.md",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=20"
@@ -61,5 +62,10 @@
   },
   "publishConfig": {
     "access": "public"
-  }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shawn1130/karing-live.git"
+  },
+  "homepage": "https://karing.ai"
 }
