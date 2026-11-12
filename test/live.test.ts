@@ -353,6 +353,54 @@ describe("a closed or finished call", () => {
     assert.equal(contexts.length, 0);
   });
 
+  it("lets the call's last words play out when it ends normally, until closed", async () => {
+    const call = listenToCall(CALL, { token: tokens() });
+    await settle();
+    FakeSocket.last.open();
+    call.playAudio();
+    FakeSocket.last.receive(new Uint8Array(400).buffer);
+    FakeSocket.last.receive({ type: "close", code: 1000, reason: "stream ended" });
+    FakeSocket.last.drop(1005);
+    assert.equal(scheduled[0]!.stopped, false, "the last words still play after a normal end");
+    assert.notEqual(contexts[0]!.state, "closed");
+    call.close();
+    assert.equal(scheduled[0]!.stopped, true, "close() cuts them short");
+    assert.equal(contexts[0]!.state, "closed");
+  });
+
+  it("reports a call that ended while reconnecting as ended, not as an error", async () => {
+    const ends: (string | null)[] = [];
+    listenToCall(CALL, { token: tokens(), onEnd: (e) => ends.push(e?.reason ?? null) });
+    await settle();
+    FakeSocket.last.open();
+    FakeSocket.last.receive({ type: "start", encoding: "mulaw", sampleRate: 8000, channels: 1 });
+    FakeSocket.last.drop(1012); // reconnects straight away
+    await settle();
+    FakeSocket.last.open();
+    FakeSocket.last.drop(4404);
+    assert.deepEqual(ends, [null]);
+  });
+
+  it("still reports a call that was never live as not-live, though its socket opened", async () => {
+    const ends: (string | null)[] = [];
+    listenToCall(CALL, { token: tokens(), onEnd: (e) => ends.push(e?.reason ?? null) });
+    await settle();
+    FakeSocket.last.open(); // Karing accepts the socket, then checks the call
+    FakeSocket.last.drop(4404);
+    assert.deepEqual(ends, ["not-live"]);
+  });
+
+  it("stops queued audio at once when listening fails", async () => {
+    const call = listenToCall(CALL, { token: tokens() });
+    await settle();
+    FakeSocket.last.open();
+    call.playAudio();
+    FakeSocket.last.receive(new Uint8Array(400).buffer);
+    FakeSocket.last.drop(1008); // refused: final, and an error
+    assert.equal(scheduled[0]!.stopped, true);
+    assert.equal(contexts[0]!.state, "closed");
+  });
+
   it("never replays audio queued before the device paused", async () => {
     const call = listenToCall(CALL, { token: tokens() });
     await settle();
@@ -437,6 +485,29 @@ describe("transcript", () => {
 });
 
 describe("audio player", () => {
+  it("finish() releases the device once the last queued chunk has played, at once when nothing is queued", () => {
+    const idle = createPlayer();
+    idle.finish();
+    assert.equal(contexts[0]!.state, "closed", "nothing queued: released at once");
+    const player = createPlayer();
+    player.push(new Uint8Array(800).buffer);
+    player.push(new Uint8Array(800).buffer);
+    player.finish();
+    scheduled[0]!.end();
+    assert.equal(contexts[1]!.state, "running", "one chunk still to play");
+    scheduled[1]!.end();
+    assert.equal(contexts[1]!.state, "closed", "released once the last one has played");
+    assert.ok(scheduled.every((s) => !s.stopped), "nothing was cut short");
+  });
+
+  it("finish() releases at once if the device pauses while draining", () => {
+    const player = createPlayer();
+    player.push(new Uint8Array(800).buffer);
+    player.finish();
+    contexts[0]!.suspend();
+    assert.equal(contexts[0]!.state, "closed");
+  });
+
   it("never plays two chunks at once, even after a stall and a burst", () => {
     const player = createPlayer();
     const chunk = () => player.push(new Uint8Array(800).buffer);

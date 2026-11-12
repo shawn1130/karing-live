@@ -25,7 +25,7 @@ export interface CallListenerOptions {
   onTranscript?: (line: TranscriptLine) => void;
   /** Called whenever the connection status changes. */
   onStatus?: (status: ConnectionStatus) => void;
-  /** Called once when listening is over: `null` when the call ended, otherwise why it stopped. */
+  /** Called once when listening is over: `null` when the call ended (also while reconnecting), otherwise why it stopped. */
   onEnd?: (error: LiveError | null) => void;
   /** Override only to point at a test environment. */
   baseUrl?: string;
@@ -39,11 +39,11 @@ export interface CallListener {
    * Returns `false`, and does nothing, once the listener has closed.
    */
   playAudio(): boolean;
-  /** Stops the audio. Speaking events and transcripts keep coming. */
+  /** Stops the audio, including any still playing out after the call ended. Speaking events and transcripts keep coming. */
   stopAudio(): void;
   /** Starts or stops the live transcript. */
   setTranscript(on: boolean): void;
-  /** Disconnects and releases the audio device. Final: nothing restarts it. */
+  /** Disconnects and releases the audio device at once. Final: nothing restarts it. */
   close(): void;
 }
 
@@ -71,6 +71,8 @@ export const listenToCall = (callId: string, options: CallListenerOptions): Call
   let player: Player | undefined;
   let speaking: Speaking = QUIET;
   let disposed = false;
+  // Karing sends "start" only once it has found the call live and its stream open.
+  let established = false;
 
   const setSpeaking = (next: Speaking) => {
     if (next.caller === speaking.caller && next.agent === speaking.agent) return;
@@ -78,9 +80,8 @@ export const listenToCall = (callId: string, options: CallListenerOptions): Call
     safely(() => options.onSpeaking?.(speaking));
   };
 
-  const release = () => {
-    disposed = true;
-    audioOn = false;
+  // Kept until closed, so close() and stopAudio() can still cut short audio playing out after the call ended.
+  const stopPlayer = () => {
     player?.close();
     player = undefined;
   };
@@ -105,7 +106,8 @@ export const listenToCall = (callId: string, options: CallListenerOptions): Call
       }
       if (!event || typeof event !== "object") return;
       const e = event as Record<string, unknown>;
-      if (e.type === "speech" && isSpeaker(e.who) && (e.state === "start" || e.state === "stop")) {
+      if (e.type === "start") established = true;
+      else if (e.type === "speech" && isSpeaker(e.who) && (e.state === "start" || e.state === "stop")) {
         setSpeaking({ ...speaking, [e.who]: e.state === "start" });
       } else if (e.type === "interrupt") {
         safely(() => options.onInterrupt?.());
@@ -125,8 +127,14 @@ export const listenToCall = (callId: string, options: CallListenerOptions): Call
       if (status !== "open") setSpeaking(QUIET);
       safely(() => options.onStatus?.(status));
     },
-    onEnd: (error) => {
-      release();
+    onEnd: (failure) => {
+      // A call that was established, and is not live on reconnecting, ended in the meantime.
+      const error = failure?.reason === "not-live" && established ? null : failure;
+      disposed = true;
+      audioOn = false;
+      // The call's last words can still be queued: they play out, unless stopped.
+      if (error) stopPlayer();
+      else player?.finish();
       safely(() => options.onEnd?.(error));
     },
   });
@@ -143,11 +151,10 @@ export const listenToCall = (callId: string, options: CallListenerOptions): Call
       return true;
     },
     stopAudio() {
+      stopPlayer();
       if (!audioOn) return;
       audioOn = false;
       connection.send({ type: "audio", on: false });
-      player?.close();
-      player = undefined;
     },
     setTranscript(on) {
       if (disposed || on === transcriptOn) return;
@@ -155,8 +162,10 @@ export const listenToCall = (callId: string, options: CallListenerOptions): Call
       connection.send({ type: "transcript", on });
     },
     close() {
+      stopPlayer();
       if (disposed) return;
-      release();
+      disposed = true;
+      audioOn = false;
       connection.close();
     },
   };

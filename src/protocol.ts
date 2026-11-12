@@ -26,7 +26,7 @@ export interface LiveToken {
  * @example "/api/karing/token"
  * @example async (signal) => (await fetch("/api/karing/token", { method: "POST", signal })).json()
  */
-export type TokenSource = string | ((signal?: AbortSignal) => Promise<LiveToken | string>);
+export type TokenSource = string | ((signal: AbortSignal) => Promise<LiveToken | string>);
 
 /** Who is talking on a call. */
 export type Speaker = "caller" | "agent";

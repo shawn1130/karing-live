@@ -27,6 +27,7 @@ const call = useCall(callId, { transcript: true });
 10. [Privacy and security](#privacy-and-security)
 11. [Bandwidth](#bandwidth)
 12. [API reference](#api-reference)
+13. [Releases](#releases)
 
 ## How it works
 
@@ -36,7 +37,7 @@ Your Karing API key stays on your server. The browser never sees it.
 2. **Your web app** uses the React hooks (or the plain TypeScript functions). They fetch a token from your route whenever they connect, then talk to Karing directly.
 3. **Karing** sends your organization's live calls, and the audio and transcript of the call you open.
 
-A token opens connections for one minute. A connection opened in time stays open for as long as it is needed, and the package gets a fresh token on its own whenever it reconnects.
+A token opens connections for one minute. A connection opened in time stays open: a call's until the call ends (after four hours it reconnects), the board's for an hour before it reconnects. The package gets a fresh token on its own whenever it reconnects.
 
 ## Install
 
@@ -71,7 +72,7 @@ export const POST = createTokenHandler({
 });
 ```
 
-`createTokenHandler` takes a standard `Request` and returns a `Response`, so the same code works in Remix, Hono, Bun, Deno and Cloudflare Workers. For Express and other frameworks, see [Your token route](#your-token-route).
+`createTokenHandler` takes a standard `Request` and returns a `Response`, so it works as is in Bun, Deno and Cloudflare Workers. Remix and Hono need one line to hand it the request: `export const action = ({ request }) => handler(request)` in Remix, `app.post("/api/karing/token", (c) => handler(c.req.raw))` in Hono. For Express and other frameworks, see [Your token route](#your-token-route).
 
 ### 2. Wrap your app
 
@@ -205,7 +206,7 @@ Turn on the transcript with `useCall(callId, { transcript: true })`. You can swi
 The same features as plain TypeScript, for Vue, Svelte, Angular or no framework at all.
 
 ```ts
-import { addTranscriptLine, EMPTY_TRANSCRIPT, listenToCall, watchLiveCalls } from "@karing-ai/live";
+import { addTranscriptLine, dropCaptions, EMPTY_TRANSCRIPT, listenToCall, watchLiveCalls } from "@karing-ai/live";
 
 const board = watchLiveCalls({
   token: "/api/karing/token",
@@ -220,6 +221,10 @@ const call = listenToCall(callId, {
   onSpeaking: ({ caller, agent }) => renderSpeakers(caller, agent),
   // addTranscriptLine keeps captions in place, as useCall does.
   onTranscript: (line) => renderTranscript((transcript = addTranscriptLine(transcript, line)).lines),
+  // After a gap, an unfinished caption will never be settled: drop it, as useCall does.
+  onStatus: (status) => {
+    if (status !== "open") renderTranscript((transcript = dropCaptions(transcript)).lines);
+  },
   onEnd: (error) => (error ? showError(error.message) : showEnded()),
 });
 
@@ -279,7 +284,7 @@ When something stops for good, you get a `LiveError` with a `reason` you can bra
 
 | `reason` | Meaning |
 | --- | --- |
-| `"not-live"` | The call is not live, or is not one of yours. On the board: your organization has no live calls set up. |
+| `"not-live"` | The call is not live, or is not one of yours. On the board: your organization has no live calls set up. A call that ends while reconnecting ends normally instead. |
 | `"unauthorized"` | Karing refused the token. Check your token route. |
 | `"forbidden"` | The token is not for a single organization. |
 | `"token"` | Your token route did not return a token (for example, the user is signed out). |
@@ -293,7 +298,7 @@ When a call simply ends, `useCall` sets `ended: true` and `listenToCall` calls `
 
 - **Your API key never leaves your server.** Keep it in server-only configuration (never a variable your bundler exposes to the browser, such as `NEXT_PUBLIC_…`), and import `@karing-ai/live/server` only from server code. If it is called in a browser by mistake it throws, as a reminder; that check cannot protect a key already shipped to a browser.
 - **Do not allow cross-origin requests to your token route.** With CORS off, other sites' JavaScript cannot read the tokens it returns.
-- **A token's minute limits new connections only.** A connection that is already open stays open until it ends: a board reconnects (with a new token) within the hour, and a call connection ends with the call. Signing a user out in your app closes their connections in that browser (change `scope` or unmount the provider); it cannot reach a copy of a token used elsewhere.
+- **A token's minute limits new connections only.** A connection that is already open stays open until it ends: a board reconnects (with a new token) within the hour, and a call connection ends with the call or reconnects after four hours. Signing a user out in your app closes their connections in that browser (change `scope` or unmount the provider); it cannot reach a copy of a token used elsewhere.
 - **Live calls are protected health information.** The board includes callers' phone numbers, and calls include audio and transcripts. Show them only to people who need them. Do not record the audio or store transcripts unless your agreements allow it.
 - **Render transcripts as text.** React does this for you. Without React, set `textContent`, never `innerHTML`.
 - **Tokens are credentials.** Do not log or store them.
@@ -342,3 +347,9 @@ The package wraps two WebSocket endpoints. You do not need them directly, but th
 - `wss://api.karing.ai/live-calls/{callId}/listen?token=…`: one call. Speaking events, transcript lines, and G.711 mu-law audio at 8 kHz, mono, in binary messages, once switched on.
 
 Just before Karing closes either socket, it sends `{"type":"close","code":…,"reason":…}` (`CloseNotice`) with the same code as the close itself. Some networks deliver close codes as `1005`. If you use the sockets directly and the close event's code is `1005` or `1006`, use this message's code instead; otherwise the close event's code stands.
+
+## Releases
+
+What changed in each version is in the [changelog](https://github.com/shawn1130/karing-live/blob/main/CHANGELOG.md), which also ships in the package as `CHANGELOG.md`. Each version is also a [GitHub release](https://github.com/shawn1130/karing-live/releases). To hear about new ones, open the repository and choose **Watch → Custom → Releases**, or subscribe to the [releases feed](https://github.com/shawn1130/karing-live/releases.atom).
+
+While the version starts with `0.`, a minor release (`0.x.0`) may change the API, and a patch release (`0.1.x`) never does.

@@ -3,15 +3,14 @@
 // .d.ts are left readable -- they are the editor hover-docs, and a consumer's
 // types cannot be hidden regardless.
 import { readdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
 import { transform } from "esbuild";
 
-const dist = new URL("../dist/", import.meta.url).pathname;
+const dist = new URL("../dist/", import.meta.url);
 const files = (await readdir(dist)).filter((f) => f.endsWith(".js"));
 const hasClientDirective = (code) => /^(?:"use client"|'use client');/.test(code);
 
 for (const file of files) {
-  const path = join(dist, file);
+  const path = new URL(file, dist);
   const result = await transform(await readFile(path, "utf8"), {
     minify: true,
     format: "esm",
@@ -24,7 +23,7 @@ for (const file of files) {
   await writeFile(path, code);
 }
 
-if (!hasClientDirective(await readFile(join(dist, "react.js"), "utf8"))) {
+if (!hasClientDirective(await readFile(new URL("react.js", dist), "utf8"))) {
   throw new Error('dist/react.js is missing its "use client" directive');
 }
 console.log(`minified ${files.length} files`);

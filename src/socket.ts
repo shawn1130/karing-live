@@ -5,23 +5,24 @@ import { closeReason, type CloseReason, type TokenSource } from "./protocol.ts";
  * Where a live connection stands.
  *
  * - `"connecting"`: getting a token and opening the socket.
- * - `"open"`: connected and receiving.
+ * - `"open"`: connected to Karing; the call's stream may still be starting.
  * - `"reconnecting"`: the connection dropped and is being reopened.
  * - `"closed"`: finished, either by you or for good (see the error).
  */
 export type ConnectionStatus = "connecting" | "open" | "reconnecting" | "closed";
 
+// Only ever shown once retrying is over, so none of these promise a retry.
 const GUIDANCE: Record<CloseReason | "token" | "unsupported", string> = {
   ended: "The stream ended.",
-  dropped: "The connection dropped. Reconnecting.",
+  dropped: "The connection dropped and could not be restored.",
   rejected: "Karing refused a message this client sent. Please report it; this is a bug.",
-  failed: "Something failed on Karing's side. Retrying.",
-  restarting: "Karing restarted a server. Reconnecting.",
+  failed: "Something failed on Karing's side, and retrying did not help.",
+  restarting: "Karing restarted a server, and reconnecting did not succeed.",
   unauthorized: "The token was refused. Check that your token route returns a fresh token from createTokenHandler().",
   forbidden: "This needs a token for a single organization.",
   "not-live": "The call is not live, or is not one of yours.",
-  busy: "Too many connections right now. Retrying.",
-  unknown: "The connection closed unexpectedly. Reconnecting.",
+  busy: "Too many connections right now. Try again later.",
+  unknown: "The connection closed unexpectedly and could not be restored.",
   token: "Your token route did not return a token.",
   unsupported: "This environment could not open a live connection.",
 };
@@ -48,13 +49,13 @@ export const safely = (fn: () => void): void => {
 };
 
 /** Gets a token string from a {@link TokenSource}, giving up when `signal` aborts. */
-export const fetchToken = async (source: TokenSource, signal?: AbortSignal): Promise<string> => {
+export const fetchToken = async (source: TokenSource, signal: AbortSignal): Promise<string> => {
   const tooLong = () => errorFor("token", "Getting a token took too long.");
   let value: unknown;
   if (typeof source === "function") {
     value = await new Promise((resolve, reject) => {
-      if (signal?.aborted) return reject(tooLong());
-      signal?.addEventListener("abort", () => reject(tooLong()), { once: true });
+      if (signal.aborted) return reject(tooLong());
+      signal.addEventListener("abort", () => reject(tooLong()), { once: true });
       source(signal).then(resolve, reject);
     });
   } else {
@@ -64,10 +65,10 @@ export const fetchToken = async (source: TokenSource, signal?: AbortSignal): Pro
         method: "POST",
         credentials: "same-origin",
         headers: { accept: "application/json" },
-        ...(signal ? { signal } : {}),
+        signal,
       });
     } catch {
-      throw signal?.aborted ? tooLong() : errorFor("token", `Could not reach ${source}.`);
+      throw signal.aborted ? tooLong() : errorFor("token", `Could not reach ${source}.`);
     }
     if (!response.ok) throw errorFor("token", `${source} answered ${response.status}.`);
     try {

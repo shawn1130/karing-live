@@ -54,7 +54,7 @@ export class FakeSocket {
 }
 
 /** Sources scheduled on the fake audio clock: start time, length, and whether stopped. */
-export const scheduled: { at: number; duration: number; stopped: boolean }[] = [];
+export const scheduled: { at: number; duration: number; stopped: boolean; end: () => void }[] = [];
 export const clock = { now: 0 };
 /** Every audio context made, newest last. */
 export const contexts: FakeAudioContext[] = [];
@@ -84,7 +84,7 @@ export class FakeAudioContext {
     return { duration: length / rate, getChannelData: () => data };
   }
   createBufferSource() {
-    const entry = { at: 0, duration: 0, stopped: false };
+    const entry = { at: 0, duration: 0, stopped: false, end: () => source.onended?.() };
     const source = {
       buffer: { duration: 0 },
       onended: null as null | (() => void),

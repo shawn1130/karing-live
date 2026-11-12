@@ -29,7 +29,7 @@ import { addTranscriptLine, dropCaptions, EMPTY_TRANSCRIPT, type Transcript } fr
 export * from "./index.ts";
 
 /** One signed-in identity's settings. A new one tears every connection down. */
-type Config = { token: (signal?: AbortSignal) => Promise<string>; baseUrl: string | undefined; scope: string };
+type Config = { token: (signal: AbortSignal) => Promise<string>; baseUrl: string | undefined; scope: string };
 const LiveContext = createContext<Config | null>(null);
 
 /** Props for {@link KaringLiveProvider}. */
@@ -144,7 +144,11 @@ export interface CallState {
    * and changes as they speak. Words spoken while disconnected are missing.
    */
   transcript: readonly TranscriptLine[];
-  /** Whether the audio is playing. */
+  /**
+   * Whether audio is switched on: `true` from `playAudio()` until `stopAudio()` or
+   * the end of the call. It stays `true` while the device is paused (`playAudio()`
+   * resumes it), and the call's last words can still play after it turns `false`.
+   */
   audio: boolean;
   /**
    * Starts the audio, or resumes it if the device paused. Call it from a

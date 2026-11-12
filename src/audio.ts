@@ -30,6 +30,8 @@ export interface Player {
   push(data: ArrayBuffer): void;
   /** Starts a suspended or interrupted device again. Call it from a click. */
   resume(): void;
+  /** Lets what is queued play out, then releases the device. `close()` still stops it at once. */
+  finish(): void;
   /** Stops playback and releases the audio device. */
   close(): void;
 }
@@ -49,6 +51,8 @@ export const createPlayer = (): Player => {
   const queued = new Set<AudioBufferSourceNode>();
   let at = 0; // when the next chunk plays, on the AudioContext clock
   let closed = false;
+  // Set by finish(): the device is released once the last queued chunk has played.
+  let finishing = false;
 
   const dropQueue = () => {
     for (const source of queued) {
@@ -60,9 +64,19 @@ export const createPlayer = (): Player => {
     at = 0;
   };
 
+  const close = () => {
+    if (closed) return;
+    closed = true;
+    dropQueue();
+    void ctx.close().catch(() => {});
+    if (session && --sessionHolders === 0 && pageSessionType !== undefined) session.type = pageSessionType;
+  };
+
   // Paused or interrupted: what was queued is stale live audio, never replayed.
   ctx.onstatechange = () => {
-    if (ctx.state !== "running") dropQueue();
+    if (ctx.state === "running") return;
+    dropQueue();
+    if (finishing) close();
   };
 
   return {
@@ -80,7 +94,11 @@ export const createPlayer = (): Player => {
       if (at > now + MAX_QUEUED_S) dropQueue();
       if (at <= now) at = now + CUSHION_S;
       source.connect(ctx.destination);
-      source.onended = () => queued.delete(source);
+      // On the audio clock, so the last chunk has really played, not merely been due.
+      source.onended = () => {
+        queued.delete(source);
+        if (finishing && !queued.size) close();
+      };
       queued.add(source);
       source.start(at);
       at += buffer.duration;
@@ -90,12 +108,11 @@ export const createPlayer = (): Player => {
       dropQueue();
       void ctx.resume().catch(() => {});
     },
-    close() {
+    finish() {
       if (closed) return;
-      closed = true;
-      dropQueue();
-      void ctx.close().catch(() => {});
-      if (session && --sessionHolders === 0 && pageSessionType !== undefined) session.type = pageSessionType;
+      finishing = true;
+      if (ctx.state !== "running" || !queued.size) close();
     },
+    close,
   };
 };
