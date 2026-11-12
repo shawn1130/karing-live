@@ -1,3 +1,4 @@
+import assert from "node:assert/strict";
 /**
  * Stand-ins for the browser APIs the package uses: a WebSocket the tests
  * drive by hand, and an AudioContext that records what would play.
@@ -18,12 +19,14 @@ export class FakeSocket {
   onclose: ((event: { code: number }) => void) | null = null;
 
   static failNext = false;
-  constructor(url: string) {
+  protocols: string[] = [];
+  constructor(url: string, protocols: string[] = []) {
     if (FakeSocket.failNext) {
       FakeSocket.failNext = false;
       throw new SyntaxError("The URL is invalid.");
     }
     this.url = url;
+    this.protocols = protocols;
     FakeSocket.all.push(this);
   }
   send(data: string) {
@@ -46,7 +49,8 @@ export class FakeSocket {
     this.onclose?.({ code });
   }
   get token() {
-    return new URL(this.url).searchParams.get("token");
+    assert.equal(this.protocols[0], "karing-live");
+    return this.protocols[1];
   }
   static get last(): FakeSocket {
     return FakeSocket.all.at(-1)!;

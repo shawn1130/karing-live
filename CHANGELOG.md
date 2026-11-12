@@ -4,6 +4,22 @@ Every release of `@karing-ai/live`, newest first. Releases follow [semantic vers
 
 Follow new releases on GitHub: open [the repository](https://github.com/shawn1130/karing-live), choose **Watch → Custom → Releases**, or subscribe to the [releases feed](https://github.com/shawn1130/karing-live/releases.atom).
 
+## 0.2.1
+
+A patch release. No code changes are needed to upgrade:
+
+```bash
+npm install @karing-ai/live@0.2.1
+```
+
+### Changed
+
+- **Tokens stay out of URLs.** Each connection now sends its token in the WebSocket handshake's subprotocol header instead of a `?token=` query parameter. URLs end up in server and proxy logs, and a token works for a minute, so keeping it out of them closes that gap.
+
+### Documentation
+
+- **Protocol:** how to send the token if you use the sockets directly.
+
 ## 0.2.0
 
 Breaking changes, in the React provider. While the version starts with `0.`, a minor release may change the API.

@@ -87,7 +87,7 @@ export const listenToCall = (callId: string, options: CallListenerOptions): Call
   };
 
   const connection = keepOpen({
-    url: (token) => `${base}/live-calls/${encodeURIComponent(callId)}/listen?token=${encodeURIComponent(token)}`,
+    url: `${base}/live-calls/${encodeURIComponent(callId)}/listen`,
     token: options.token,
     final: new Set(["ended", "not-live", "forbidden", "rejected"]),
     maxRetries: 5,

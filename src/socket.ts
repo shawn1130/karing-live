@@ -83,8 +83,8 @@ export const fetchToken = async (source: TokenSource, signal: AbortSignal): Prom
 };
 
 export interface KeepOpenOptions {
-  /** The socket URL for a token. */
-  url: (token: string) => string;
+  /** The socket URL. The token goes in the handshake's subprotocols, never here. */
+  url: string;
   token: TokenSource;
   /** Close reasons after which reopening is pointless. */
   final: ReadonlySet<CloseReason>;
@@ -155,7 +155,9 @@ export const keepOpen = (options: KeepOpenOptions): { send: (command: object) =>
 
     let ws: WebSocket;
     try {
-      ws = new WebSocket(options.url(token));
+      // In the subprotocol header, not the URL, which request logs keep. The
+      // server answers with the first name offered, so the token is never echoed.
+      ws = new WebSocket(options.url, ["karing-live", token]);
     } catch (error) {
       // A bad address or no WebSocket support: retrying cannot help.
       return finish(errorFor("unsupported", error instanceof Error ? error.message : undefined));

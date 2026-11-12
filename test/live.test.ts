@@ -32,7 +32,8 @@ describe("watchLiveCalls", () => {
     const board = watchLiveCalls({ token: tokens(), onChange: (c) => lists.push(c) });
     await settle();
     const s = FakeSocket.last;
-    assert.equal(s.url, "wss://api.karing.ai/live-calls?token=t1");
+    assert.equal(s.url, "wss://api.karing.ai/live-calls", "no token in the URL");
+    assert.deepEqual(s.protocols, ["karing-live", "t1"]);
     s.open();
     s.receive({ type: "snapshot", calls: [call(1), call(2)] });
     s.receive({ type: "call.upsert", call: { ...call(1), agentName: "Billing" } });
@@ -113,7 +114,8 @@ describe("listenToCall", () => {
     });
     await settle();
     const s = FakeSocket.last;
-    assert.equal(s.url, `wss://api.karing.ai/live-calls/${CALL}/listen?token=t1`);
+    assert.equal(s.url, `wss://api.karing.ai/live-calls/${CALL}/listen`, "no token in the URL");
+    assert.deepEqual(s.protocols, ["karing-live", "t1"]);
     s.open();
     assert.deepEqual(s.sent, [{ type: "transcript", on: true }]);
     s.receive({ type: "start", encoding: "mulaw", sampleRate: 8000, channels: 1 });

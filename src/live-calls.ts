@@ -53,7 +53,7 @@ export const watchLiveCalls = (options: LiveCallsOptions): { close: () => void }
   };
 
   return keepOpen({
-    url: (token) => `${base}/live-calls?token=${encodeURIComponent(token)}`,
+    url: `${base}/live-calls`,
     token: options.token,
     final: new Set(["not-live", "forbidden", "rejected"]),
     maxRetries: Infinity,
