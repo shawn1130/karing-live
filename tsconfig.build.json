@@ -3,14 +3,13 @@
   "compilerOptions": {
     "noEmit": false,
     "declaration": true,
-    "declarationMap": true,
-    "sourceMap": true,
+    "declarationMap": false,
+    "sourceMap": false,
+    "removeComments": true,
     "rootDir": "src",
     "outDir": "dist",
     "isolatedDeclarations": true,
     "types": []
   },
-  "include": [
-    "src"
-  ]
+  "include": ["src"]
 }

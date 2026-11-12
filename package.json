@@ -30,7 +30,6 @@
   },
   "files": [
     "dist",
-    "src",
     "README.md"
   ],
   "engines": {
@@ -45,15 +44,17 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.build.json",
+    "build": "tsc -p tsconfig.build.json && node scripts/minify.mjs",
     "typecheck": "tsc",
-    "test": "node --test --test-timeout=20000 \"test/**/*.test.ts\""
+    "test": "node --test --test-timeout=20000 \"test/**/*.test.ts\"",
+    "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "devDependencies": {
     "@happy-dom/global-registrator": "21.0.4",
     "@types/node": "24.19.2",
     "@types/react": "19.3.0",
     "@types/react-dom": "19.3.0",
+    "esbuild": "0.28.2",
     "react": "19.3.1",
     "react-dom": "19.3.1",
     "typescript": "7.0.2"
