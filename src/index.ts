@@ -1,8 +1,8 @@
 /**
  * Live calls in your web app, without React: the live call board
  * ({@link watchLiveCalls}) and one call's audio, speakers and transcript
- * ({@link listenToCall}). For React, import `@karing/live/react`; for your
- * token route, `@karing/live/server`.
+ * ({@link listenToCall}). For React, import `@karing-ai/live/react`; for your
+ * token route, `@karing-ai/live/server`.
  *
  * @module
  */

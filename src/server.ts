@@ -14,7 +14,7 @@ export { LiveError } from "./errors.ts";
 // keeping it in server-only configuration and this module out of browser code.
 const serverOnly = () => {
   if (typeof (globalThis as { document?: unknown }).document !== "undefined") {
-    throw new LiveError("token", "@karing/live/server is for your server only. Keep it, and your API key, out of browser code.");
+    throw new LiveError("token", "@karing-ai/live/server is for your server only. Keep it, and your API key, out of browser code.");
   }
 };
 
@@ -94,7 +94,7 @@ const json = (status: number, body: object) =>
  *
  * @example
  * // app/api/karing/token/route.ts (Next.js)
- * import { createTokenHandler } from "@karing/live/server";
+ * import { createTokenHandler } from "@karing-ai/live/server";
  *
  * export const POST = createTokenHandler({
  *   apiKey: process.env.KARING_API_KEY!,

@@ -36,7 +36,7 @@ const LiveContext = createContext<Config | null>(null);
 export interface KaringLiveProviderProps {
   /**
    * Where tokens come from: the URL of your token route (see
-   * `createTokenHandler` in `@karing/live/server`), or a function that
+   * `createTokenHandler` in `@karing-ai/live/server`), or a function that
    * returns one. A function may change between renders without reconnecting.
    */
   token: TokenSource;

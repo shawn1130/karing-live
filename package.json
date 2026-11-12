@@ -1,6 +1,6 @@
 {
   "name": "@karing-ai/live",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "private": false,
   "description": "Live calls in your web app: a live call board, call audio and live transcripts from Karing, with full TypeScript types.",
   "keywords": [

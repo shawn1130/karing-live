@@ -18,7 +18,7 @@ export interface LiveToken {
 
 /**
  * Where a token comes from in the browser: either the URL of your own token
- * route (see `createTokenHandler` in `@karing/live/server`), which is called
+ * route (see `createTokenHandler` in `@karing-ai/live/server`), which is called
  * with `POST` and your page's cookies, or a function that returns a token.
  * A function is passed a signal that aborts when the package stops waiting
  * (after 10 seconds, or when the connection closes); pass it to `fetch`.
