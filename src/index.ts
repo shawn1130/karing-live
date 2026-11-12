@@ -19,8 +19,10 @@ export {
   type ListenEvent,
   type LiveCall,
   type LiveToken,
+  type Outcome,
   type Speaker,
   type TokenSource,
+  type ToolCall,
   type TranscriptLine,
 } from "./protocol.ts";
 export type { ConnectionStatus } from "./socket.ts";

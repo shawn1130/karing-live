@@ -4,6 +4,20 @@ Every release of `@karing-ai/live`, newest first. Releases follow [semantic vers
 
 Follow new releases on GitHub: open [the repository](https://github.com/shawn1130/karing-live), choose **Watch → Custom → Releases**, or subscribe to the [releases feed](https://github.com/shawn1130/karing-live/releases.atom).
 
+## 0.3.0
+
+New fields on the live board. Nothing you use today changes:
+
+```bash
+npm install @karing-ai/live@0.3.0
+```
+
+### Added
+
+- **Sentiment and topic on each live call.** `LiveCall.sentiment` (`"positive"`, `"neutral"` or `"negative"`) and `LiveCall.topic` (why they called) update as the call goes on, and are `null` until there is a reading.
+- **Tool calls on each live call.** `LiveCall.tools` lists the tools the AI agent has used, by name and timing only.
+- **How a call ended.** `useLiveCalls({ onEnded })` and `watchLiveCalls({ onEnded })` are called with the call and its outcome, such as `"transferred"` or `"caller_hung_up"`. See [When a call ends](README.md#when-a-call-ends).
+
 ## 0.2.1
 
 A patch release. No code changes are needed to upgrade:

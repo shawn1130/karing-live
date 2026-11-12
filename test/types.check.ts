@@ -7,6 +7,9 @@ declare const board: BoardEvent;
 if (board.type === "call.removed") {
   const reason: "ended" | "stale" = board.reason;
   void reason;
+  // @ts-expect-error: an outcome may be missing
+  const outcome: string = board.outcome;
+  void outcome;
   // @ts-expect-error: a removal carries only the id
   void board.call;
 }

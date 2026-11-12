@@ -23,7 +23,7 @@ import {
 import type { LiveError } from "./errors.ts";
 import { listenToCall, type CallListener, type Speaking } from "./listen.ts";
 import { watchLiveCalls } from "./live-calls.ts";
-import type { LiveCall, TokenSource, TranscriptLine } from "./protocol.ts";
+import type { LiveCall, Outcome, TokenSource, TranscriptLine } from "./protocol.ts";
 import { fetchToken, type ConnectionStatus } from "./socket.ts";
 import { addTranscriptLine, dropCaptions, EMPTY_TRANSCRIPT, type Transcript } from "./transcript.ts";
 
@@ -112,17 +112,33 @@ export interface LiveCallsState {
 
 const NO_CALLS: LiveCallsState = { calls: [], status: "connecting", error: null };
 
+/** Options for {@link useLiveCalls}. */
+export interface UseLiveCallsOptions {
+  /**
+   * Called when a call on the board ends, with the call as last shown and how
+   * it ended (`null` when unknown). The latest function you pass is used;
+   * changing it does not reconnect.
+   */
+  onEnded?: (call: LiveCall, outcome: Outcome | null) => void;
+}
+
 /**
  * Your organization's live calls, kept current. Calls appear as they start
  * and disappear as they end; after a reconnect the list is rebuilt from
  * scratch.
  *
  * @example
- * const { calls, status } = useLiveCalls();
+ * const { calls, status } = useLiveCalls({
+ *   onEnded: (call, outcome) => outcome === "transferred" && toast(`${call.agentName} transferred a call`),
+ * });
  * return calls.map((call) => <Row key={call.callId} call={call} />);
  */
-export function useLiveCalls(): LiveCallsState {
+export function useLiveCalls(options: UseLiveCallsOptions = {}): LiveCallsState {
   const config = useConfig("useLiveCalls");
+  const onEnded = useRef(options.onEnded);
+  useLayoutEffect(() => {
+    onEnded.current = options.onEnded;
+  });
   // State remembers whose it is, so a new userId never shows the last one's calls, not even for one render.
   const [state, setState] = useState<{ owner: Config; value: LiveCallsState } | null>(null);
 
@@ -135,6 +151,7 @@ export function useLiveCalls(): LiveCallsState {
       onChange: (calls) => update({ calls }),
       onStatus: (status) => update({ status }),
       onError: (error) => update({ error }),
+      onEnded: (call, outcome) => onEnded.current?.(call, outcome),
     });
     return () => board.close();
   }, [config]);

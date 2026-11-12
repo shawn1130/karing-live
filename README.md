@@ -167,12 +167,43 @@ Each call is a `LiveCall`:
 | `phoneNumberName` | `string \| null` | The name of that line, including internal transfer lines. |
 | `customerNumber` | `string \| null` | The caller's number in E.164 form. `null` when withheld or on a web call. |
 | `startedAt` | `string \| null` | When the call started (ISO 8601). |
+| `sentiment` | `"positive" \| "neutral" \| "negative" \| null` | How the caller comes across, from the latest reading. Updated as the call goes on; `null` until the first reading. |
+| `topic` | `string \| null` | Why they called, as understood so far, such as `"refill request"`. `null` until it is clear. |
+| `tools` | `ToolCall[]` | The tools the AI agent has used, oldest first, at most the latest 20. Each is `{ name, startedAt, endedAt }`: `endedAt` is `null` while the tool runs. Only the name and timing are sent, never what the tool was given or returned. |
 
 Good to know:
 
 - **Every call leg is its own call.** When one AI agent hands a caller to another, the first leg leaves the board and a new one appears, with a new `callId`.
 - **The board shows what is live now.** After a reconnect the list is rebuilt from scratch, so it can never drift. A call that started and ended while the browser was offline never appears.
 - **Calls are shown for at most two hours.** A call still marked live after two hours is taken off the board. That is a display rule; it does not prove the call ended.
+
+### When a call ends
+
+Pass `onEnded` to hear how each call on the board ended:
+
+```tsx
+const { calls } = useLiveCalls({
+  onEnded: (call, outcome) => {
+    if (outcome === "transferred") toast(`${call.agentName ?? "The agent"} transferred a call`);
+  },
+});
+```
+
+It gets the call as it was last shown and one of these outcomes, or `null` when Karing does not know:
+
+| Outcome | Meaning |
+| --- | --- |
+| `"transferred"` | The AI agent transferred the call. This says the transfer started, not that the other end answered. A handoff to another AI agent counts too, and its next leg appears as a new call. |
+| `"caller_hung_up"` | The caller hung up. |
+| `"agent_ended"` | The AI agent ended the call. |
+| `"timed_out"` | The call went silent for too long, or reached its time limit. |
+| `"voicemail"` | An outbound call reached voicemail. |
+| `"no_answer"` | An outbound call was not answered, or the line was busy. |
+| `"transfer_failed"` | A transfer was tried and did not go through. |
+| `"error"` | The call ended on an error. |
+| `"other"` | Any other ending, including ones added after your version of this package. |
+
+`onEnded` is not called for a call taken off the board after two hours, nor for a call that ended while the board was disconnected. The latest function you pass is used, and changing it does not reconnect.
 
 ## Listening to a call
 
@@ -213,6 +244,7 @@ const board = watchLiveCalls({
   token: "/api/karing/token",
   onChange: (calls) => renderBoard(calls),
   onStatus: (status) => renderStatus(status),
+  onEnded: (call, outcome) => showEnded(call, outcome),
 });
 
 let transcript = EMPTY_TRANSCRIPT;
@@ -385,7 +417,7 @@ Every export has a description and examples in its type definitions, which your 
 | Export | What it is |
 | --- | --- |
 | `KaringLiveProvider` | Makes live calls available to the hooks below it. Props: `token` (your token route's URL, or a function) and `userId` (the id of the person signed in to your app; when it changes, everything inside the provider starts fresh; not a credential, never sent to Karing). |
-| `useLiveCalls()` | `{ calls, status, error }`: your organization's live calls. |
+| `useLiveCalls(options?)` | `{ calls, status, error }`: your organization's live calls. `options.onEnded(call, outcome)` hears how each call ended. |
 | `useCall(callId, { transcript? })` | `{ status, speaking, transcript, audio, playAudio, stopAudio, ended, error }` for one call. |
 
 Everything from `@karing-ai/live` is also exported here.
@@ -399,7 +431,7 @@ Everything from `@karing-ai/live` is also exported here.
 | `addTranscriptLine`, `dropCaptions`, `EMPTY_TRANSCRIPT` | Keep a transcript in speaking order, captions in place, as `useCall` does. |
 | `LiveError` | Every error this package reports, with `reason` and `message`. |
 | `CLOSE_CODES`, `closeReason(code)` | Close codes and what they mean. |
-| Types | `LiveCall`, `TranscriptLine`, `Transcript`, `Speaker`, `Speaking`, `ConnectionStatus`, `TokenSource`, `LiveToken`, `BoardEvent`, `ListenEvent`, `ListenCommand`, `CloseReason`, `LiveErrorReason`. |
+| Types | `LiveCall`, `ToolCall`, `Outcome`, `TranscriptLine`, `Transcript`, `Speaker`, `Speaking`, `ConnectionStatus`, `TokenSource`, `LiveToken`, `BoardEvent`, `ListenEvent`, `ListenCommand`, `CloseReason`, `LiveErrorReason`. |
 
 ### `@karing-ai/live/server`
 

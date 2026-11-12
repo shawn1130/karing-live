@@ -14,7 +14,7 @@ const { contexts, FakeSocket, installFakes, settle } = await import("./fakes.ts"
 
 const CALL_1 = "019a1b2c-3d4e-7f00-8a1b-000000000001";
 const CALL_2 = "019a1b2c-3d4e-7f00-8a1b-000000000002";
-const call = (callId: string) => ({ callId, agentId: null, agentName: "Front Desk", direction: "inbound", phoneNumber: null, phoneNumberName: null, customerNumber: "+12025550142", startedAt: null });
+const call = (callId: string) => ({ callId, agentId: null, agentName: "Front Desk", direction: "inbound", phoneNumber: null, phoneNumberName: null, customerNumber: "+12025550142", startedAt: null, sentiment: null, topic: null, tools: [] });
 
 /** Renders into a fresh root; returns a rerender and an unmount. */
 const mount = async (element: ReturnType<typeof h>) => {
@@ -89,6 +89,25 @@ describe("KaringLiveProvider userId", () => {
     await view.rerender(app());
     await view.rerender(app());
     await flush();
+    assert.equal(FakeSocket.all.length, 1);
+    await view.unmount();
+  });
+
+  it("calls the latest onEnded with how a call ended, without reconnecting when it changes", async () => {
+    const ended: string[] = [];
+    const Board = ({ tag }: { tag: string }) => (useLiveCalls({ onEnded: (c, outcome) => ended.push(`${tag}:${c.callId.slice(-1)}:${outcome}`) }), null);
+    const app = (tag: string) => h(KaringLiveProvider, { userId: "u:o", token: async () => "t" }, h(Board, { tag }));
+    const view = await mount(app("first"));
+    await flush();
+    const s = FakeSocket.last;
+    await inAct(() => {
+      s.open();
+      s.receive({ type: "snapshot", calls: [call(CALL_1), call(CALL_2)] });
+      s.receive({ type: "call.removed", callId: CALL_1, reason: "ended", outcome: "caller_hung_up" });
+    });
+    await view.rerender(app("second"));
+    await inAct(() => s.receive({ type: "call.removed", callId: CALL_2, reason: "ended", outcome: "transferred" }));
+    assert.deepEqual(ended, ["first:1:caller_hung_up", "second:2:transferred"]);
     assert.equal(FakeSocket.all.length, 1);
     await view.unmount();
   });

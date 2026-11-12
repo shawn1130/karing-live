@@ -31,6 +31,33 @@ export type TokenSource = string | ((signal: AbortSignal) => Promise<LiveToken |
 /** Who is talking on a call. */
 export type Speaker = "caller" | "agent";
 
+/**
+ * How a call ended. `"transferred"` means the AI agent started a transfer,
+ * which does not prove the other end answered; a handoff to another AI agent
+ * counts too, and its next leg appears as a new call. `"other"` covers any
+ * ending this version does not name.
+ */
+export type Outcome =
+  | "transferred"
+  | "caller_hung_up"
+  | "agent_ended"
+  | "timed_out"
+  | "voicemail"
+  | "no_answer"
+  | "transfer_failed"
+  | "error"
+  | "other";
+
+/** A tool the AI agent used on a call: its name and timing only, never what it was given or returned. */
+export interface ToolCall {
+  /** The tool's name. */
+  name: string;
+  /** When the agent called it (ISO 8601). `null` when unknown. */
+  startedAt: string | null;
+  /** When it finished (ISO 8601). `null` while it runs, or when its finish was not recorded. */
+  endedAt: string | null;
+}
+
 /** One live call, as your board shows it. Every call leg is its own call. */
 export interface LiveCall {
   /** The call leg's id. The same id Karing's call logs show. */
@@ -53,6 +80,12 @@ export interface LiveCall {
   customerNumber: string | null;
   /** When the call started, as an ISO 8601 timestamp. `null` when unknown. */
   startedAt: string | null;
+  /** How the caller comes across, from the latest reading. `null` until there is one. */
+  sentiment: "positive" | "neutral" | "negative" | null;
+  /** Why they called, as understood so far. `null` until it is clear. */
+  topic: string | null;
+  /** The tools the AI agent has used, oldest first: at most the latest 20. */
+  tools: readonly ToolCall[];
 }
 
 /** A line of the live transcript. */
@@ -102,6 +135,8 @@ export type BoardEvent =
        * display rule, not proof the call ended.
        */
       reason: "ended" | "stale";
+      /** How it ended, when Karing knows: `null` otherwise. */
+      outcome?: Outcome | null;
     }
   | CloseNotice;
 

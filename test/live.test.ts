@@ -15,6 +15,9 @@ const call = (n: number, startedAt = `2026-11-12T10:0${n}:00.000Z`): LiveCall =>
   phoneNumberName: "Main",
   customerNumber: "+12025550142",
   startedAt,
+  sentiment: null,
+  topic: null,
+  tools: [],
 });
 
 /** A token source that hands out t1, t2, ... and counts its calls. */
@@ -44,6 +47,45 @@ describe("watchLiveCalls", () => {
       lists.map((l) => l.map((c) => `${c.callId.slice(-1)}:${c.agentName}`)),
       [["2:Front Desk", "1:Front Desk"], ["2:Front Desk", "1:Billing"], ["1:Billing"]],
     );
+    board.close();
+  });
+
+  it("fills in sentiment, topic and tools when the server sends none, and keeps only valid ones", async () => {
+    const lists: (readonly LiveCall[])[] = [];
+    const board = watchLiveCalls({ token: tokens(), onChange: (c) => lists.push(c) });
+    await settle();
+    const s = FakeSocket.last;
+    s.open();
+    const { sentiment: _s, topic: _t, tools: _x, ...older } = call(1);
+    s.receive({ type: "snapshot", calls: [older] });
+    assert.deepEqual(lists.at(-1), [call(1)]);
+    const tool = { name: "lookup_patient", startedAt: "2026-11-12T10:01:05.000Z", endedAt: null };
+    s.receive({ type: "call.upsert", call: { ...call(1), sentiment: "negative", topic: "refill request", tools: [tool, { name: 7 }, null] } });
+    assert.deepEqual(lists.at(-1), [{ ...call(1), sentiment: "negative", topic: "refill request", tools: [tool] }]);
+    s.receive({ type: "call.upsert", call: { ...call(1), sentiment: "furious", topic: 3, tools: "x" } });
+    assert.deepEqual(lists.at(-1), [call(1)]);
+    board.close();
+  });
+
+  it("says how a call it showed ended, and nothing for a stale or unseen one", async () => {
+    const ended: string[] = [];
+    const board = watchLiveCalls({
+      token: tokens(),
+      onChange: () => {},
+      onEnded: (c, outcome) => ended.push(`${c.callId.slice(-1)}:${c.agentName}:${outcome}`),
+    });
+    await settle();
+    const s = FakeSocket.last;
+    s.open();
+    s.receive({ type: "snapshot", calls: [1, 2, 3, 4, 5].map((n) => call(n)) });
+    s.receive({ type: "call.upsert", call: { ...call(1), agentName: "Billing" } });
+    s.receive({ type: "call.removed", callId: call(1).callId, reason: "ended", outcome: "transferred" });
+    s.receive({ type: "call.removed", callId: call(1).callId, reason: "ended", outcome: "transferred" }); // already gone
+    s.receive({ type: "call.removed", callId: call(2).callId, reason: "ended", outcome: "a-new-kind" });
+    s.receive({ type: "call.removed", callId: call(3).callId, reason: "ended" }); // a server that sends none
+    s.receive({ type: "call.removed", callId: call(4).callId, reason: "stale", outcome: null });
+    s.receive({ type: "call.removed", callId: "never-shown", reason: "ended", outcome: "voicemail" });
+    assert.deepEqual(ended, ["1:Billing:transferred", "2:Front Desk:other", "3:Front Desk:null"]);
     board.close();
   });
 
