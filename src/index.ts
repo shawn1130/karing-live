@@ -13,6 +13,7 @@ export {
   CLOSE_CODES,
   closeReason,
   type BoardEvent,
+  type CloseNotice,
   type CloseReason,
   type ListenCommand,
   type ListenEvent,

@@ -68,12 +68,21 @@ export interface TranscriptLine {
   final: boolean;
 }
 
+/**
+ * Sent by both sockets just before Karing closes them, with the same code and
+ * reason as the close itself. Some networks deliver close codes as 1005, so
+ * when the close event's code is 1005 or 1006 this code is the one to use;
+ * otherwise the close event's code stands. The package handles it for you.
+ */
+export type CloseNotice = { type: "close"; code: number; reason: string };
+
 /** Messages the listen socket sends as text. */
 export type ListenEvent =
   | { type: "start"; encoding: "mulaw"; sampleRate: 8000; channels: 1 }
   | { type: "speech"; who: Speaker; state: "start" | "stop" }
   | { type: "interrupt" }
-  | ({ type: "transcript" } & TranscriptLine);
+  | ({ type: "transcript" } & TranscriptLine)
+  | CloseNotice;
 
 /**
  * Messages the live board socket sends. Apply them by `callId`:
@@ -93,7 +102,8 @@ export type BoardEvent =
        * display rule, not proof the call ended.
        */
       reason: "ended" | "stale";
-    };
+    }
+  | CloseNotice;
 
 /** Messages the listen socket accepts. */
 export type ListenCommand = { type: "audio"; on: boolean } | { type: "transcript"; on: boolean };

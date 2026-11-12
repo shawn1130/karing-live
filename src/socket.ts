@@ -162,6 +162,9 @@ export const keepOpen = (options: KeepOpenOptions): { send: (command: object) =>
     ws.binaryType = "arraybuffer";
     socket = ws;
     let openedAt = 0;
+    // The close code Karing announced as a message just before closing. Some
+    // networks deliver close codes as 1005 or 1006, so this one is trusted then.
+    let announced: number | undefined;
     const send = (command: object) => {
       if (ws.readyState === WebSocket.OPEN) ws.send(JSON.stringify(command));
     };
@@ -173,13 +176,22 @@ export const keepOpen = (options: KeepOpenOptions): { send: (command: object) =>
       safely(() => options.onOpen(send));
     };
     ws.onmessage = (event) => {
-      if (socket === ws) safely(() => options.onMessage(event.data as string | ArrayBuffer));
+      if (socket !== ws) return;
+      const data = event.data as string | ArrayBuffer;
+      if (typeof data === "string" && data.startsWith('{"type":"close"')) {
+        try {
+          const code = (JSON.parse(data) as { code?: unknown }).code;
+          if (typeof code === "number") announced = code;
+        } catch {}
+        return;
+      }
+      safely(() => options.onMessage(data));
     };
     ws.onclose = (event) => {
       if (socket !== ws || stopped) return;
       socket = undefined;
       if (openedAt && Date.now() - openedAt > HEALTHY_MS) attempts = 0;
-      const reason = closeReason(event.code);
+      const reason = closeReason((event.code === 1005 || event.code === 1006) && announced !== undefined ? announced : event.code);
       if (options.final.has(reason)) return finish(reason === "ended" ? null : errorFor(reason));
       // The first restart or expired token after a healthy spell is retried at once; after that, back off.
       retry(errorFor(reason), attempts === 0 && (reason === "restarting" || reason === "unauthorized"));

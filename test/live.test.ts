@@ -251,6 +251,95 @@ describe("connection failures", () => {
   });
 });
 
+describe("close codes lost on the way", () => {
+  it("uses the code Karing announced when the close arrives as 1005", async () => {
+    const errors: string[] = [];
+    watchLiveCalls({ token: tokens(), onChange: () => {}, onError: (e) => errors.push(e.reason) });
+    await settle();
+    FakeSocket.last.open();
+    FakeSocket.last.receive({ type: "close", code: 4404, reason: "no live calls for this organization" });
+    FakeSocket.last.drop(1005);
+    await settle();
+    assert.deepEqual(errors, ["not-live"], "stopped for good, as a 4404 says, instead of retrying");
+    assert.equal(FakeSocket.all.length, 1);
+  });
+
+  it("reconnects at once on an announced restart, and never passes the notice on", async () => {
+    const seen: string[] = [];
+    const call = listenToCall(CALL, { token: tokens(), onEnd: (e) => seen.push(`end:${e?.reason ?? null}`) });
+    await settle();
+    FakeSocket.last.open();
+    FakeSocket.last.receive({ type: "close", code: 1012, reason: "service restart" });
+    FakeSocket.last.drop(1005);
+    await settle();
+    await settle();
+    assert.equal(FakeSocket.all.length, 2, "reconnected straight away");
+    assert.equal(FakeSocket.last.token, "t2");
+    FakeSocket.last.open();
+    FakeSocket.last.receive({ type: "close", code: 1000, reason: "stream ended" });
+    FakeSocket.last.drop(1005);
+    assert.deepEqual(seen, ["end:null"], "an announced 1000 ends the call cleanly");
+    call.close();
+  });
+});
+
+describe("close notices, edge cases", () => {
+  it("uses the notice for a 1006 as well", async () => {
+    const errors: string[] = [];
+    watchLiveCalls({ token: tokens(), onChange: () => {}, onError: (e) => errors.push(e.reason) });
+    await settle();
+    FakeSocket.last.open();
+    FakeSocket.last.receive({ type: "close", code: 4403, reason: "token must be for one organization" });
+    FakeSocket.last.drop(1006);
+    await settle();
+    assert.deepEqual(errors, ["forbidden"]);
+  });
+
+  it("ignores a notice whose code is not a number", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const errors: string[] = [];
+    const board = watchLiveCalls({ token: tokens(), onChange: () => {}, onError: (e) => errors.push(e.reason) });
+    await settle();
+    FakeSocket.last.open();
+    FakeSocket.last.receive({ type: "close", code: "4404", reason: "x" });
+    FakeSocket.last.drop(1005);
+    await settle();
+    assert.deepEqual(errors, [], "not stopped: an unreadable notice is no notice");
+    board.close();
+  });
+
+  it("lets a close code that arrived intact stand over the notice", async () => {
+    watchLiveCalls({ token: tokens(), onChange: () => {} });
+    await settle();
+    FakeSocket.last.open();
+    FakeSocket.last.receive({ type: "close", code: 4404, reason: "x" });
+    FakeSocket.last.drop(1012);
+    await settle();
+    await settle();
+    assert.equal(FakeSocket.all.length, 2, "the intact 1012 reconnected at once; the 4404 was not used");
+  });
+
+  it("never carries a notice over to the next socket", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const errors: string[] = [];
+    const board = watchLiveCalls({ token: tokens(), onChange: () => {}, onError: (e) => errors.push(e.reason) });
+    await settle();
+    FakeSocket.last.open();
+    // A final code is announced, but the intact 1012 stands: reconnect at once.
+    FakeSocket.last.receive({ type: "close", code: 4404, reason: "call is not live" });
+    FakeSocket.last.drop(1012);
+    await settle();
+    await settle();
+    assert.equal(FakeSocket.all.length, 2);
+    FakeSocket.last.open();
+    FakeSocket.last.drop(1005); // no notice on this socket: a leaked 4404 would make this final
+    await settle();
+    assert.deepEqual(errors, [], "the first socket's notice did not make the second's close final");
+    assert.equal(FakeSocket.all.length, 2, "and it backs off rather than reconnecting at once");
+    board.close();
+  });
+});
+
 describe("a closed or finished call", () => {
   it("never starts an audio device again", async () => {
     const call = listenToCall(CALL, { token: tokens() });
