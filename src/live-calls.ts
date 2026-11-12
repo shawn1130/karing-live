@@ -16,8 +16,19 @@ export interface LiveCallsOptions {
   baseUrl?: string;
 }
 
-const isCall = (call: unknown): call is LiveCall =>
-  !!call && typeof call === "object" && typeof (call as { callId?: unknown }).callId === "string";
+const nullableString = (v: unknown) => v === null || typeof v === "string";
+const DIRECTIONS = new Set([null, "inbound", "outbound", "web"]);
+
+/** Every field checked: one malformed call must not break the board. */
+const isCall = (call: unknown): call is LiveCall => {
+  if (!call || typeof call !== "object") return false;
+  const c = call as Record<string, unknown>;
+  return (
+    typeof c.callId === "string" &&
+    DIRECTIONS.has(c.direction as string | null) &&
+    [c.agentId, c.agentName, c.phoneNumber, c.phoneNumberName, c.customerNumber, c.startedAt].every(nullableString)
+  );
+};
 
 /** Newest first; calls with no start time last. */
 const byStart = (a: LiveCall, b: LiveCall) => (b.startedAt ?? "").localeCompare(a.startedAt ?? "");

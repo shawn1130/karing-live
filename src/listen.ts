@@ -109,7 +109,13 @@ export const listenToCall = (callId: string, options: CallListenerOptions): Call
         setSpeaking({ ...speaking, [e.who]: e.state === "start" });
       } else if (e.type === "interrupt") {
         safely(() => options.onInterrupt?.());
-      } else if (e.type === "transcript" && isSpeaker(e.who) && typeof e.text === "string" && typeof e.final === "boolean") {
+      } else if (
+        e.type === "transcript" &&
+        transcriptOn && // one already on its way when it was switched off is dropped
+        isSpeaker(e.who) &&
+        typeof e.text === "string" &&
+        typeof e.final === "boolean"
+      ) {
         const line: TranscriptLine = { who: e.who, text: e.text, final: e.final };
         safely(() => options.onTranscript?.(line));
       }

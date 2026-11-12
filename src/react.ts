@@ -206,7 +206,10 @@ export function useCall(callId: string | null | undefined, options: UseCallOptio
       onStatus: (status) =>
         // A gap: an unfinished line will never be settled.
         update((v) => ({ status, ...(status === "open" ? {} : { transcript: dropCaptions(v.transcript) }) })),
-      onTranscript: (line) => update((v) => ({ transcript: addTranscriptLine(v.transcript, line) })),
+      onTranscript: (line) => {
+        // Only while the committed render wants it, so nothing returns after it was switched off.
+        if (wantTranscript.current) update((v) => ({ transcript: addTranscriptLine(v.transcript, line) }));
+      },
       onEnd: (why) => update(() => ({ audio: false, ...(why ? { error: why } : { ended: true }) })),
     });
     listener.current = { owner, call };

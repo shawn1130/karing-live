@@ -61,6 +61,26 @@ describe("KaringLiveProvider scope", () => {
     await view.unmount();
   });
 
+  it("aborts its token request when it unmounts", async () => {
+    const signals: AbortSignal[] = [];
+    const realFetch = globalThis.fetch;
+    globalThis.fetch = ((_url: string, init: RequestInit) => {
+      signals.push(init.signal!);
+      return new Promise(() => {});
+    }) as typeof fetch;
+    try {
+      const Board = () => (useLiveCalls(), null);
+      const view = await mount(h(KaringLiveProvider, { scope: "u:o", token: "/api/karing/token" }, h(Board)));
+      await flush();
+      assert.equal(signals.length, 1);
+      assert.equal(signals[0]!.aborted, false);
+      await view.unmount();
+      assert.equal(signals[0]!.aborted, true);
+    } finally {
+      globalThis.fetch = realFetch;
+    }
+  });
+
   it("does not reconnect when an inline token function changes", async () => {
     const Board = () => (useLiveCalls(), null);
     const app = () => h(KaringLiveProvider, { scope: "u:o", token: async () => "t" }, h(Board));
@@ -125,6 +145,8 @@ describe("useCall", () => {
     await view.rerender(app(false));
     assert.equal(state!.transcript.length, 0);
     assert.deepEqual(FakeSocket.last.sent.at(-1), { type: "transcript", on: false });
+    // A line that was already on its way when it was switched off.
+    await inAct(() => FakeSocket.last.receive({ type: "transcript", who: "agent", text: "Let me check", final: false }));
     await view.rerender(app(true));
     assert.equal(state!.transcript.length, 0, "the old caption does not come back");
     await view.unmount();

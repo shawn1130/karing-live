@@ -27,6 +27,7 @@ export const MAX_TRANSCRIPT_LINES = 500;
  * onTranscript: (line) => render((transcript = addTranscriptLine(transcript, line)).lines)
  */
 export const addTranscriptLine = (transcript: Transcript, line: TranscriptLine, max: number = MAX_TRANSCRIPT_LINES): Transcript => {
+  const keep = Number.isFinite(max) ? Math.max(1, Math.floor(max)) : MAX_TRANSCRIPT_LINES;
   let lines = [...transcript.lines];
   const captions: Partial<Record<Speaker, number>> = { ...transcript.captions };
   const at = captions[line.who];
@@ -35,7 +36,7 @@ export const addTranscriptLine = (transcript: Transcript, line: TranscriptLine, 
   if (line.final) delete captions[line.who];
   else captions[line.who] = at ?? lines.length - 1;
 
-  const over = lines.length - max;
+  const over = lines.length - keep;
   if (over > 0) {
     lines = lines.slice(over);
     for (const who of Object.keys(captions) as Speaker[]) {

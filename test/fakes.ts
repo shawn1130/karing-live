@@ -62,6 +62,12 @@ export const contexts: FakeAudioContext[] = [];
 export class FakeAudioContext {
   destination = {};
   state: "running" | "suspended" | "closed" = "running";
+  onstatechange: (() => void) | null = null;
+  /** Test control: what the browser does when the device pauses. */
+  suspend() {
+    this.state = "suspended";
+    this.onstatechange?.();
+  }
   constructor(options: { sampleRate: number }) {
     if (options.sampleRate !== 8000) throw new Error("expected 8 kHz");
     contexts.push(this);

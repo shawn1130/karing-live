@@ -20,11 +20,13 @@ export interface LiveToken {
  * Where a token comes from in the browser: either the URL of your own token
  * route (see `createTokenHandler` in `@karing/live/server`), which is called
  * with `POST` and your page's cookies, or a function that returns a token.
+ * A function is passed a signal that aborts when the package stops waiting
+ * (after 10 seconds, or when the connection closes); pass it to `fetch`.
  *
  * @example "/api/karing/token"
- * @example async () => (await fetch("/api/karing/token", { method: "POST" })).json()
+ * @example async (signal) => (await fetch("/api/karing/token", { method: "POST", signal })).json()
  */
-export type TokenSource = string | (() => Promise<LiveToken | string>);
+export type TokenSource = string | ((signal?: AbortSignal) => Promise<LiveToken | string>);
 
 /** Who is talking on a call. */
 export type Speaker = "caller" | "agent";

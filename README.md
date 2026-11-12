@@ -185,7 +185,7 @@ call.ended; // true once the call is over
 ```
 
 - **Start audio from a click.** Browsers only allow sound after the user clicks or presses a key, so call `playAudio()` from an event handler.
-- **Audio flows only while it plays.** With the audio off, an open `useCall` still holds one connection and receives small speaking events, but no audio.
+- **Audio flows only while it is on.** With the audio off, an open `useCall` still holds one connection and receives small speaking events, but no audio.
 - **If the audio pauses** (for example, a phone call takes over the device), `call.playAudio()` from another click resumes it.
 - **iPhone.** While audio plays, the package asks Safari to play it as media, so the ring/silent switch does not mute it (iOS 17 and later). The page's own setting comes back when the last call stops playing.
 - **Phone quality.** Both sides are mixed into one channel at 8 kHz, which is everything heard on a phone call.
@@ -256,6 +256,15 @@ A token source in the browser can also be a function, if your app fetches tokens
 <KaringLiveProvider scope={`${user.id}:${org.id}`} token={async () => (await api.post("/live-token")).data} />
 ```
 
+A function is passed an `AbortSignal` that aborts when the package stops waiting (after 10 seconds, or when the connection closes); pass it on to your request if you can:
+
+```tsx
+<KaringLiveProvider
+  scope={`${user.id}:${org.id}`}
+  token={async (signal) => (await fetch("/api/live-token", { method: "POST", signal })).json()}
+/>
+```
+
 ## Connections, errors and retries
 
 The package keeps connections open for you:
@@ -291,7 +300,7 @@ When a call simply ends, `useCall` sets `ended: true` and `listenToCall` calls `
 
 ## Bandwidth
 
-Audio is sent only while it is playing, at about 8 KB per second (about 29 MB per hour of listening). The board and the speaking indicators are small messages, sent as calls change and people speak.
+Audio is sent only while it is on, at about 8 KB per second (about 29 MB per hour of listening). The board and the speaking indicators are small messages, sent as calls change and people speak.
 
 ## API reference
 

@@ -98,7 +98,13 @@ const json = (status: number, body: object) =>
  *
  * export const POST = createTokenHandler({
  *   apiKey: process.env.KARING_API_KEY!,
- *   authorize: async (request) => (await getSession(request))?.user.role === "staff",
+ *   // Only signed-in users of the organization this key is for, who may see live calls.
+ *   authorize: async (request) => {
+ *     const session = await getSession(request);
+ *     const orgId = process.env.KARING_ORG_ID;
+ *     if (!session || !orgId) return false;
+ *     return session.organizationId === orgId && session.user.canViewLiveCalls === true;
+ *   },
  * });
  */
 export const createTokenHandler = (options: TokenHandlerOptions): ((request: Request) => Promise<Response>) => {

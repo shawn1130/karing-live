@@ -39,12 +39,13 @@ export interface Player {
  * start audio after one.
  */
 export const createPlayer = (): Player => {
+  // The device first: if it cannot be had, the page's audio setting is never touched.
+  const ctx = new AudioContext({ sampleRate: 8000 });
   const session = audioSession();
   if (session && sessionHolders++ === 0) {
     pageSessionType = session.type;
     session.type = "playback";
   }
-  const ctx = new AudioContext({ sampleRate: 8000 });
   const queued = new Set<AudioBufferSourceNode>();
   let at = 0; // when the next chunk plays, on the AudioContext clock
   let closed = false;
@@ -57,6 +58,11 @@ export const createPlayer = (): Player => {
     }
     queued.clear();
     at = 0;
+  };
+
+  // Paused or interrupted: what was queued is stale live audio, never replayed.
+  ctx.onstatechange = () => {
+    if (ctx.state !== "running") dropQueue();
   };
 
   return {
@@ -80,7 +86,9 @@ export const createPlayer = (): Player => {
       at += buffer.duration;
     },
     resume() {
-      if (!closed && ctx.state !== "running") void ctx.resume().catch(() => {});
+      if (closed || ctx.state === "running") return;
+      dropQueue();
+      void ctx.resume().catch(() => {});
     },
     close() {
       if (closed) return;

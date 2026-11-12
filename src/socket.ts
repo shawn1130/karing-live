@@ -55,7 +55,7 @@ export const fetchToken = async (source: TokenSource, signal?: AbortSignal): Pro
     value = await new Promise((resolve, reject) => {
       if (signal?.aborted) return reject(tooLong());
       signal?.addEventListener("abort", () => reject(tooLong()), { once: true });
-      source().then(resolve, reject);
+      source(signal).then(resolve, reject);
     });
   } else {
     let response: Response;

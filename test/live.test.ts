@@ -211,6 +211,34 @@ describe("connection failures", () => {
     mock.restoreAll();
   });
 
+  it("aborts the request to the token route when it takes too long", async (t) => {
+    t.mock.timers.enable({ apis: ["setTimeout"] });
+    const signals: AbortSignal[] = [];
+    mock.method(globalThis, "fetch", (_url: string, init: RequestInit) => {
+      signals.push(init.signal!);
+      return new Promise(() => {});
+    });
+    const board = watchLiveCalls({ token: "/api/karing/token", onChange: () => {} });
+    await settle();
+    assert.equal(signals[0]!.aborted, false);
+    t.mock.timers.tick(TOKEN_TIMEOUT_MS);
+    assert.equal(signals[0]!.aborted, true);
+    board.close();
+    mock.restoreAll();
+  });
+
+  it("refuses a call with any malformed field, keeping the rest of the board", async () => {
+    const lists: (readonly LiveCall[])[] = [];
+    const board = watchLiveCalls({ token: tokens(), onChange: (c) => lists.push(c) });
+    await settle();
+    FakeSocket.last.receive({
+      type: "snapshot",
+      calls: [{ ...call(1), startedAt: 42 }, { ...call(2), direction: "sideways" }, { ...call(3), agentName: {} }, call(4)],
+    });
+    assert.deepEqual(lists.at(-1)!.map((c) => c.callId), [call(4).callId]);
+    board.close();
+  });
+
   it("ignores malformed messages instead of throwing", async () => {
     const lists: (readonly LiveCall[])[] = [];
     const board = watchLiveCalls({ token: tokens(), onChange: (c) => lists.push(c) });
@@ -234,6 +262,32 @@ describe("a closed or finished call", () => {
     FakeSocket.last.drop(4404);
     assert.equal(ended.playAudio(), false);
     assert.equal(contexts.length, 0);
+  });
+
+  it("never replays audio queued before the device paused", async () => {
+    const call = listenToCall(CALL, { token: tokens() });
+    await settle();
+    FakeSocket.last.open();
+    call.playAudio();
+    FakeSocket.last.receive(new Uint8Array(800).buffer);
+    assert.equal(scheduled[0]!.stopped, false);
+    contexts[0]!.suspend();
+    assert.equal(scheduled[0]!.stopped, true, "stopped as the device paused, with no packet after");
+    call.playAudio();
+    assert.equal(contexts[0]!.state, "running");
+    assert.equal(scheduled.filter((s) => !s.stopped).length, 0);
+    call.close();
+  });
+
+  it("drops a transcript line already on its way when the transcript was switched off", async () => {
+    const lines: string[] = [];
+    const call = listenToCall(CALL, { token: tokens(), transcript: true, onTranscript: (l) => lines.push(l.text) });
+    await settle();
+    FakeSocket.last.open();
+    call.setTranscript(false);
+    FakeSocket.last.receive({ type: "transcript", who: "agent", text: "late", final: false });
+    assert.deepEqual(lines, []);
+    call.close();
   });
 
   it("resumes a paused device from the next click instead of making another", async () => {
@@ -280,6 +334,16 @@ describe("transcript", () => {
     for (let i = 0; i < 3; i++) t = addTranscriptLine(t, line("caller", `l${i}`, true), 3);
     assert.deepEqual(t.lines.map((l) => l.text), ["l0", "l1", "l2"]);
     assert.deepEqual(t.captions, {}, "a caption pushed out of the window is forgotten");
+  });
+
+  it("keeps whole line positions whatever limit it is given", () => {
+    let t = EMPTY_TRANSCRIPT;
+    for (const l of [line("caller", "a", true), line("agent", "b"), line("caller", "c")]) t = addTranscriptLine(t, l, 1.5);
+    assert.deepEqual(t.lines.map((l) => l.text), ["c"]);
+    assert.ok(Object.values(t.captions).every(Number.isInteger));
+    for (const max of [Number.NaN, Number.POSITIVE_INFINITY]) {
+      assert.equal(addTranscriptLine(EMPTY_TRANSCRIPT, line("caller", "x", true), max).lines.length, 1, String(max));
+    }
   });
 });
 
