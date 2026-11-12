@@ -415,7 +415,7 @@ The package wraps two WebSocket endpoints. You do not need them directly, but th
 - `wss://api.karing.ai/live-calls`: the board. A `snapshot`, then `call.upsert` and `call.removed`.
 - `wss://api.karing.ai/live-calls/{callId}/listen`: one call. Speaking events, transcript lines, and G.711 mu-law audio at 8 kHz, mono, in binary messages, once switched on.
 
-Send the token as the second subprotocol, after `karing-live`: `new WebSocket(url, ["karing-live", token])`. Never put it in the URL, which servers and proxies write to their logs. Karing answers with `karing-live`. A `?token=` query parameter still works for now and will be removed.
+Send the token as the second subprotocol, after `karing-live`: `new WebSocket(url, ["karing-live", token])`. Never put it in the URL, which servers and proxies write to their logs. Karing answers with `karing-live`. A token in the URL is refused.
 
 Just before Karing closes either socket, it sends `{"type":"close","code":…,"reason":…}` (`CloseNotice`) with the same code as the close itself. Some networks deliver close codes as `1005`. If you use the sockets directly and the close event's code is `1005` or `1006`, use this message's code instead; otherwise the close event's code stands.
 
