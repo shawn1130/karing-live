@@ -1,4 +1,4 @@
-# @karing/live
+# @karing-ai/live
 
 Live calls in your web app: a live call board, call audio, and live transcripts, from Karing. Strictly typed, with no runtime dependencies.
 
@@ -41,7 +41,7 @@ A token opens connections for one minute. A connection opened in time stays open
 ## Install
 
 ```sh
-npm install @karing/live
+npm install @karing-ai/live
 ```
 
 React 18 or later is needed for the hooks; the rest has no dependencies. Node.js 20 or later for the server helper.
@@ -54,7 +54,7 @@ Keep your Karing API key in a server environment variable, for example `KARING_A
 
 ```ts
 // app/api/karing/token/route.ts (Next.js App Router)
-import { createTokenHandler } from "@karing/live/server";
+import { createTokenHandler } from "@karing-ai/live/server";
 import { getSession } from "@/lib/auth"; // your own auth
 
 export const POST = createTokenHandler({
@@ -80,7 +80,7 @@ export const POST = createTokenHandler({
 ```tsx
 "use client";
 import type { ReactNode } from "react";
-import { KaringLiveProvider } from "@karing/live/react";
+import { KaringLiveProvider } from "@karing-ai/live/react";
 
 export function LiveCallsProvider({ userId, orgId, children }: { userId: string; orgId: string; children: ReactNode }) {
   return (
@@ -98,7 +98,7 @@ When a user signs out, unmount the provider or change its `scope`.
 ```tsx
 "use client";
 import { useState } from "react";
-import { useCall, useLiveCalls } from "@karing/live/react";
+import { useCall, useLiveCalls } from "@karing-ai/live/react";
 
 export function LiveBoard() {
   const { calls, status } = useLiveCalls();
@@ -205,7 +205,7 @@ Turn on the transcript with `useCall(callId, { transcript: true })`. You can swi
 The same features as plain TypeScript, for Vue, Svelte, Angular or no framework at all.
 
 ```ts
-import { addTranscriptLine, EMPTY_TRANSCRIPT, listenToCall, watchLiveCalls } from "@karing/live";
+import { addTranscriptLine, EMPTY_TRANSCRIPT, listenToCall, watchLiveCalls } from "@karing-ai/live";
 
 const board = watchLiveCalls({
   token: "/api/karing/token",
@@ -241,7 +241,7 @@ Other frameworks can use `createLiveToken` directly:
 
 ```ts
 // Express
-import { createLiveToken } from "@karing/live/server";
+import { createLiveToken } from "@karing-ai/live/server";
 
 // requireOwnOrgStaff: your own middleware, applying the same rule as authorize above.
 app.post("/api/karing/token", requireOwnOrgStaff, async (req, res) => {
@@ -291,7 +291,7 @@ When a call simply ends, `useCall` sets `ended: true` and `listenToCall` calls `
 
 ## Privacy and security
 
-- **Your API key never leaves your server.** Keep it in server-only configuration (never a variable your bundler exposes to the browser, such as `NEXT_PUBLIC_…`), and import `@karing/live/server` only from server code. If it is called in a browser by mistake it throws, as a reminder; that check cannot protect a key already shipped to a browser.
+- **Your API key never leaves your server.** Keep it in server-only configuration (never a variable your bundler exposes to the browser, such as `NEXT_PUBLIC_…`), and import `@karing-ai/live/server` only from server code. If it is called in a browser by mistake it throws, as a reminder; that check cannot protect a key already shipped to a browser.
 - **Do not allow cross-origin requests to your token route.** With CORS off, other sites' JavaScript cannot read the tokens it returns.
 - **A token's minute limits new connections only.** A connection that is already open stays open until it ends: a board reconnects (with a new token) within the hour, and a call connection ends with the call. Signing a user out in your app closes their connections in that browser (change `scope` or unmount the provider); it cannot reach a copy of a token used elsewhere.
 - **Live calls are protected health information.** The board includes callers' phone numbers, and calls include audio and transcripts. Show them only to people who need them. Do not record the audio or store transcripts unless your agreements allow it.
@@ -306,7 +306,7 @@ Audio is sent only while it is on, at about 8 KB per second (about 29 MB per hou
 
 Every export has a description and examples in its type definitions, which your editor shows on hover.
 
-### `@karing/live/react`
+### `@karing-ai/live/react`
 
 | Export | What it is |
 | --- | --- |
@@ -314,9 +314,9 @@ Every export has a description and examples in its type definitions, which your 
 | `useLiveCalls()` | `{ calls, status, error }`: your organization's live calls. |
 | `useCall(callId, { transcript? })` | `{ status, speaking, transcript, audio, playAudio, stopAudio, ended, error }` for one call. |
 
-Everything from `@karing/live` is also exported here.
+Everything from `@karing-ai/live` is also exported here.
 
-### `@karing/live`
+### `@karing-ai/live`
 
 | Export | What it is |
 | --- | --- |
@@ -327,7 +327,7 @@ Everything from `@karing/live` is also exported here.
 | `CLOSE_CODES`, `closeReason(code)` | Close codes and what they mean. |
 | Types | `LiveCall`, `TranscriptLine`, `Transcript`, `Speaker`, `Speaking`, `ConnectionStatus`, `TokenSource`, `LiveToken`, `BoardEvent`, `ListenEvent`, `ListenCommand`, `CloseReason`, `LiveErrorReason`. |
 
-### `@karing/live/server`
+### `@karing-ai/live/server`
 
 | Export | What it is |
 | --- | --- |
