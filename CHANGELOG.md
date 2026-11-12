@@ -16,7 +16,7 @@ npm install @karing-ai/live@0.3.0
 
 - **Sentiment and topic on each live call.** `LiveCall.sentiment` (`"positive"`, `"neutral"` or `"negative"`) and `LiveCall.topic` (why they called) update as the call goes on, and are `null` until there is a reading.
 - **Tool calls on each live call.** `LiveCall.tools` lists the tools the AI agent has used, by name and timing only.
-- **How a call ended.** `useLiveCalls({ onEnded })` and `watchLiveCalls({ onEnded })` are called with the call and its outcome, such as `"transferred"` or `"caller_hung_up"`. See [When a call ends](README.md#when-a-call-ends).
+- **How a call ended.** `useLiveCalls({ onEnded })` and `watchLiveCalls({ onEnded })` are called with the call and `{ outcome, transferredTo }`: `"transferred"` or `"ended"`, and for a transfer, the phone number or AI agent it went to. See [When a call ends](README.md#when-a-call-ends).
 
 ## 0.2.1
 

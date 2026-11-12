@@ -23,7 +23,7 @@ import {
 import type { LiveError } from "./errors.ts";
 import { listenToCall, type CallListener, type Speaking } from "./listen.ts";
 import { watchLiveCalls } from "./live-calls.ts";
-import type { LiveCall, Outcome, TokenSource, TranscriptLine } from "./protocol.ts";
+import type { CallEnd, LiveCall, TokenSource, TranscriptLine } from "./protocol.ts";
 import { fetchToken, type ConnectionStatus } from "./socket.ts";
 import { addTranscriptLine, dropCaptions, EMPTY_TRANSCRIPT, type Transcript } from "./transcript.ts";
 
@@ -116,10 +116,10 @@ const NO_CALLS: LiveCallsState = { calls: [], status: "connecting", error: null 
 export interface UseLiveCallsOptions {
   /**
    * Called when a call on the board ends, with the call as last shown and how
-   * it ended (`null` when unknown). The latest function you pass is used;
+   * it ended (see {@link CallEnd}). The latest function you pass is used;
    * changing it does not reconnect.
    */
-  onEnded?: (call: LiveCall, outcome: Outcome | null) => void;
+  onEnded?: (call: LiveCall, end: CallEnd) => void;
 }
 
 /**
@@ -129,7 +129,9 @@ export interface UseLiveCallsOptions {
  *
  * @example
  * const { calls, status } = useLiveCalls({
- *   onEnded: (call, outcome) => outcome === "transferred" && toast(`${call.agentName} transferred a call`),
+ *   onEnded: (call, { outcome, transferredTo }) => {
+ *     if (outcome === "transferred") toast(`${call.agentName} transferred a call to ${transferredTo}`);
+ *   },
  * });
  * return calls.map((call) => <Row key={call.callId} call={call} />);
  */
@@ -151,7 +153,7 @@ export function useLiveCalls(options: UseLiveCallsOptions = {}): LiveCallsState 
       onChange: (calls) => update({ calls }),
       onStatus: (status) => update({ status }),
       onError: (error) => update({ error }),
-      onEnded: (call, outcome) => onEnded.current?.(call, outcome),
+      onEnded: (call, end) => onEnded.current?.(call, end),
     });
     return () => board.close();
   }, [config]);

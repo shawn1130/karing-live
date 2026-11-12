@@ -32,21 +32,25 @@ export type TokenSource = string | ((signal: AbortSignal) => Promise<LiveToken |
 export type Speaker = "caller" | "agent";
 
 /**
- * How a call ended. `"transferred"` means the AI agent started a transfer,
- * which does not prove the other end answered; a handoff to another AI agent
- * counts too, and its next leg appears as a new call. `"other"` covers any
- * ending this version does not name.
+ * How a call ended: `"transferred"` when the AI agent transferred it, or
+ * `"ended"` for any other ending (the caller hung up, the agent ended it, it
+ * went silent, an error).
  */
-export type Outcome =
-  | "transferred"
-  | "caller_hung_up"
-  | "agent_ended"
-  | "timed_out"
-  | "voicemail"
-  | "no_answer"
-  | "transfer_failed"
-  | "error"
-  | "other";
+export type Outcome = "transferred" | "ended";
+
+/** How a call ended, as the `onEnded` callback of `useLiveCalls` and `watchLiveCalls` hears it. */
+export interface CallEnd {
+  /** How it ended, or `null` when Karing does not know. */
+  outcome: Outcome | null;
+  /**
+   * Where a transferred call went: a phone number in E.164 form
+   * (`+15551234567`), or the name of the AI agent it was handed to (any value
+   * not starting with `+`). `null` when the call was not transferred or the
+   * destination is unknown. A transfer means it started, not that the other
+   * end answered; a handoff to an AI agent also appears as a new call.
+   */
+  transferredTo: string | null;
+}
 
 /** A tool the AI agent used on a call: its name and timing only, never what it was given or returned. */
 export interface ToolCall {
@@ -135,8 +139,10 @@ export type BoardEvent =
        * display rule, not proof the call ended.
        */
       reason: "ended" | "stale";
-      /** How it ended, when Karing knows: `null` otherwise. */
+      /** With `reason: "ended"`: how it ended, `null` when unknown. */
       outcome?: Outcome | null;
+      /** Where a transferred call went (see {@link CallEnd}), `null` otherwise. */
+      transferredTo?: string | null;
     }
   | CloseNotice;
 

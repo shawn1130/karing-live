@@ -67,25 +67,34 @@ describe("watchLiveCalls", () => {
     board.close();
   });
 
-  it("says how a call it showed ended, and nothing for a stale or unseen one", async () => {
+  it("says how a call it showed ended and where a transfer went, and nothing for a stale or unseen one", async () => {
     const ended: string[] = [];
     const board = watchLiveCalls({
       token: tokens(),
       onChange: () => {},
-      onEnded: (c, outcome) => ended.push(`${c.callId.slice(-1)}:${c.agentName}:${outcome}`),
+      onEnded: (c, { outcome, transferredTo }) => ended.push(`${c.callId.slice(-1)}:${c.agentName}:${outcome}:${transferredTo}`),
     });
     await settle();
     const s = FakeSocket.last;
     s.open();
-    s.receive({ type: "snapshot", calls: [1, 2, 3, 4, 5].map((n) => call(n)) });
+    s.receive({ type: "snapshot", calls: [1, 2, 3, 4, 5, 6].map((n) => call(n)) });
     s.receive({ type: "call.upsert", call: { ...call(1), agentName: "Billing" } });
-    s.receive({ type: "call.removed", callId: call(1).callId, reason: "ended", outcome: "transferred" });
-    s.receive({ type: "call.removed", callId: call(1).callId, reason: "ended", outcome: "transferred" }); // already gone
-    s.receive({ type: "call.removed", callId: call(2).callId, reason: "ended", outcome: "a-new-kind" });
-    s.receive({ type: "call.removed", callId: call(3).callId, reason: "ended" }); // a server that sends none
-    s.receive({ type: "call.removed", callId: call(4).callId, reason: "stale", outcome: null });
-    s.receive({ type: "call.removed", callId: "never-shown", reason: "ended", outcome: "voicemail" });
-    assert.deepEqual(ended, ["1:Billing:transferred", "2:Front Desk:other", "3:Front Desk:null"]);
+    const removed = (n: number, more: object) => s.receive({ type: "call.removed", callId: call(n).callId, reason: "ended", ...more });
+    removed(1, { outcome: "transferred", transferredTo: "+18565550100" });
+    removed(1, { outcome: "transferred", transferredTo: "+18565550100" }); // already gone
+    removed(2, { outcome: "transferred", transferredTo: "scheduling-cw" });
+    removed(3, { outcome: "ended", transferredTo: "+18565550100" }); // a target only rides a transfer
+    removed(4, { outcome: "voicemail" }); // a finer ending from some later server
+    removed(5, {}); // a server that sends none
+    s.receive({ type: "call.removed", callId: call(6).callId, reason: "stale", outcome: null });
+    s.receive({ type: "call.removed", callId: "never-shown", reason: "ended", outcome: "ended" });
+    assert.deepEqual(ended, [
+      "1:Billing:transferred:+18565550100",
+      "2:Front Desk:transferred:scheduling-cw",
+      "3:Front Desk:ended:null",
+      "4:Front Desk:ended:null",
+      "5:Front Desk:null:null",
+    ]);
     board.close();
   });
 

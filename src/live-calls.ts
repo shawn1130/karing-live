@@ -1,5 +1,5 @@
 import type { LiveError } from "./errors.ts";
-import { DEFAULT_BASE_URL, type LiveCall, type Outcome, type TokenSource, type ToolCall } from "./protocol.ts";
+import { DEFAULT_BASE_URL, type CallEnd, type LiveCall, type TokenSource, type ToolCall } from "./protocol.ts";
 import { keepOpen, safely, type ConnectionStatus } from "./socket.ts";
 
 /** Options for {@link watchLiveCalls}. */
@@ -14,10 +14,11 @@ export interface LiveCallsOptions {
   onError?: (error: LiveError) => void;
   /**
    * Called when a call on the board ends, with the call as last shown and how
-   * it ended (`null` when unknown). Not called for a call taken off the board
-   * after two hours, nor for one that ended while you were disconnected.
+   * it ended. Not called for a call taken off the board after two hours, nor
+   * for one that ended while you were disconnected. A call that comes back on
+   * the board and ends again is reported again.
    */
-  onEnded?: (call: LiveCall, outcome: Outcome | null) => void;
+  onEnded?: (call: LiveCall, end: CallEnd) => void;
   /** Override only to point at a test environment. */
   baseUrl?: string;
 }
@@ -25,7 +26,6 @@ export interface LiveCallsOptions {
 const nullableString = (v: unknown) => v === null || typeof v === "string";
 const DIRECTIONS = new Set([null, "inbound", "outbound", "web"]);
 const SENTIMENTS = new Set(["positive", "neutral", "negative"]);
-const OUTCOMES = new Set<unknown>(["transferred", "caller_hung_up", "agent_ended", "timed_out", "voicemail", "no_answer", "transfer_failed", "error", "other"]);
 
 const isTool = (t: unknown): t is ToolCall => {
   const x = t as Record<string, unknown> | null;
@@ -52,9 +52,11 @@ const toCall = (call: unknown): LiveCall | undefined => {
   };
 };
 
-/** An outcome this version names, `"other"` for one it does not, `null` for none. */
-const outcomeOf = (v: unknown): Outcome | null =>
-  typeof v !== "string" ? null : OUTCOMES.has(v) ? (v as Outcome) : "other";
+/** Any outcome but a transfer reads as `"ended"`; a destination only rides a transfer. */
+const endOf = (e: Record<string, unknown>): CallEnd => {
+  const outcome = typeof e.outcome !== "string" ? null : e.outcome === "transferred" ? "transferred" : "ended";
+  return { outcome, transferredTo: outcome === "transferred" && typeof e.transferredTo === "string" ? e.transferredTo : null };
+};
 
 /** Newest first; calls with no start time last. */
 const byStart = (a: LiveCall, b: LiveCall) => (b.startedAt ?? "").localeCompare(a.startedAt ?? "");
@@ -107,7 +109,7 @@ export const watchLiveCalls = (options: LiveCallsOptions): { close: () => void }
         const ended = calls.get(e.callId);
         if (!ended) return;
         calls.delete(e.callId);
-        if (e.reason === "ended") safely(() => options.onEnded?.(ended, outcomeOf(e.outcome)));
+        if (e.reason === "ended") safely(() => options.onEnded?.(ended, endOf(e)));
       } else {
         return;
       }

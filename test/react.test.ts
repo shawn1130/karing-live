@@ -95,7 +95,7 @@ describe("KaringLiveProvider userId", () => {
 
   it("calls the latest onEnded with how a call ended, without reconnecting when it changes", async () => {
     const ended: string[] = [];
-    const Board = ({ tag }: { tag: string }) => (useLiveCalls({ onEnded: (c, outcome) => ended.push(`${tag}:${c.callId.slice(-1)}:${outcome}`) }), null);
+    const Board = ({ tag }: { tag: string }) => (useLiveCalls({ onEnded: (c, end) => ended.push(`${tag}:${c.callId.slice(-1)}:${end.outcome}`) }), null);
     const app = (tag: string) => h(KaringLiveProvider, { userId: "u:o", token: async () => "t" }, h(Board, { tag }));
     const view = await mount(app("first"));
     await flush();
@@ -103,11 +103,11 @@ describe("KaringLiveProvider userId", () => {
     await inAct(() => {
       s.open();
       s.receive({ type: "snapshot", calls: [call(CALL_1), call(CALL_2)] });
-      s.receive({ type: "call.removed", callId: CALL_1, reason: "ended", outcome: "caller_hung_up" });
+      s.receive({ type: "call.removed", callId: CALL_1, reason: "ended", outcome: "ended" });
     });
     await view.rerender(app("second"));
     await inAct(() => s.receive({ type: "call.removed", callId: CALL_2, reason: "ended", outcome: "transferred" }));
-    assert.deepEqual(ended, ["first:1:caller_hung_up", "second:2:transferred"]);
+    assert.deepEqual(ended, ["first:1:ended", "second:2:transferred"]);
     assert.equal(FakeSocket.all.length, 1);
     await view.unmount();
   });
