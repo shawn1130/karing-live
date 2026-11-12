@@ -9,6 +9,7 @@
 import {
   createContext,
   createElement,
+  Fragment,
   useCallback,
   useContext,
   useEffect,
@@ -28,8 +29,8 @@ import { addTranscriptLine, dropCaptions, EMPTY_TRANSCRIPT, type Transcript } fr
 
 export * from "./index.ts";
 
-/** One signed-in identity's settings. A new one tears every connection down. */
-type Config = { token: (signal: AbortSignal) => Promise<string>; baseUrl: string | undefined; scope: string };
+/** One signed-in person's settings (see `userId`). A new one tears every connection down. */
+type Config = { token: (signal: AbortSignal) => Promise<string>; baseUrl: string | undefined; userId: string };
 const LiveContext = createContext<Config | null>(null);
 
 /** Props for {@link KaringLiveProvider}. */
@@ -41,12 +42,25 @@ export interface KaringLiveProviderProps {
    */
   token: TokenSource;
   /**
-   * Who is signed in and for which organization, for example
-   * `` `${user.id}:${org.id}` ``. When it changes (sign-out, a different user,
-   * an organization switch), every live connection closes and nothing from
-   * before is shown again. Required, so one person never sees another's calls.
+   * The id of the person signed in to your app right now, for example
+   * `user.id` (`` `${user.id}:${org.id}` `` if people can switch between
+   * organizations in your app).
+   *
+   * When it changes, everything inside the provider is remounted, live
+   * connections close and the audio stops; the board hook, and call hooks
+   * with a call id, then ask your token route for new tokens as they connect.
+   * No hook state carries over to the next
+   * person. Data your app keeps outside the provider (parent state, stores,
+   * caches) is yours to clear.
+   *
+   * It is not a credential and is never sent to Karing: what a browser can
+   * see is decided by your token route's `authorize` check and by your API
+   * key's organization. Keep it the same while the same person is signed in.
+   * While nobody is signed in, don't render the provider.
+   *
+   * @see https://github.com/shawn1130/karing-live#the-userid-prop
    */
-  scope: string;
+  userId: string;
   /** Override only to point at a test environment. */
   baseUrl?: string;
   children?: ReactNode;
@@ -56,11 +70,11 @@ export interface KaringLiveProviderProps {
  * Makes live calls available to the hooks below it.
  *
  * @example
- * <KaringLiveProvider token="/api/karing/token" scope={`${user.id}:${org.id}`}>
+ * <KaringLiveProvider token="/api/karing/token" userId={user.id}>
  *   <LiveBoard />
  * </KaringLiveProvider>
  */
-export function KaringLiveProvider({ token, scope, baseUrl, children }: KaringLiveProviderProps): ReactElement {
+export function KaringLiveProvider({ token, userId, baseUrl, children }: KaringLiveProviderProps): ReactElement {
   // The token source as of the last committed render: a render React throws
   // away never changes what live connections use. Layout effects run before
   // the hooks' effects open anything.
@@ -70,17 +84,19 @@ export function KaringLiveProvider({ token, scope, baseUrl, children }: KaringLi
   });
   const tokenKey = typeof token === "string" ? token : "function";
   const value = useMemo<Config>(
-    () => ({ token: (signal) => fetchToken(source.current, signal), baseUrl, scope }),
+    () => ({ token: (signal) => fetchToken(source.current, signal), baseUrl, userId }),
     // tokenKey: a different route is a different setup; a new function is not.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [scope, tokenKey, baseUrl],
+    [userId, tokenKey, baseUrl],
   );
-  return createElement(LiveContext.Provider, { value }, children);
+  // Keyed by the signed-in person: when they change, everything inside the
+  // provider is remounted, the app's own state (a selected call, say) included.
+  return createElement(LiveContext.Provider, { value }, createElement(Fragment, { key: userId }, children));
 }
 
 const useConfig = (hook: string): Config => {
   const config = useContext(LiveContext);
-  if (!config) throw new Error(`${hook}() must be used inside <KaringLiveProvider token="..." scope="...">.`);
+  if (!config) throw new Error(`${hook}() must be used inside <KaringLiveProvider token="..." userId="...">.`);
   return config;
 };
 
@@ -107,7 +123,7 @@ const NO_CALLS: LiveCallsState = { calls: [], status: "connecting", error: null 
  */
 export function useLiveCalls(): LiveCallsState {
   const config = useConfig("useLiveCalls");
-  // State remembers whose it is, so a new scope never shows the last one's calls, not even for one render.
+  // State remembers whose it is, so a new userId never shows the last one's calls, not even for one render.
   const [state, setState] = useState<{ owner: Config; value: LiveCallsState } | null>(null);
 
   useEffect(() => {
@@ -181,7 +197,7 @@ const CLOSED: CallValue = { ...FRESH, status: "closed" };
 export function useCall(callId: string | null | undefined, options: UseCallOptions = {}): CallState {
   const config = useConfig("useCall");
   const transcriptOn = options.transcript === true;
-  // Whose state this is: the scope and the call. Anything else is never returned.
+  // Whose state this is: the userId and the call. Anything else is never returned.
   const owner = useMemo(() => ({ config, callId: callId ?? null }), [config, callId]);
   const [state, setState] = useState<{ owner: typeof owner; value: CallValue } | null>(null);
   const listener = useRef<{ owner: typeof owner; call: CallListener } | null>(null);

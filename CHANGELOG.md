@@ -4,6 +4,31 @@ Every release of `@karing-ai/live`, newest first. Releases follow [semantic vers
 
 Follow new releases on GitHub: open [the repository](https://github.com/shawn1130/karing-live), choose **Watch → Custom → Releases**, or subscribe to the [releases feed](https://github.com/shawn1130/karing-live/releases.atom).
 
+## 0.2.0
+
+Breaking changes, in the React provider. While the version starts with `0.`, a minor release may change the API.
+
+```bash
+npm install @karing-ai/live@0.2.0
+```
+
+### Changed (breaking)
+
+- **`scope` is now `userId`.** `KaringLiveProvider`'s required prop is renamed, because "scope" read like a permission, and it never was one. It is the id of the person signed in to your app, used only to start fresh when that person changes. It is not sent to Karing and grants nothing. To upgrade, rename the prop; the value can stay the same:
+
+  ```diff
+  - <KaringLiveProvider token="/api/karing/token" scope={user.id}>
+  + <KaringLiveProvider token="/api/karing/token" userId={user.id}>
+  ```
+
+  TypeScript points to every place that needs the change.
+
+- **Everything inside the provider starts fresh when `userId` changes.** The provider now remounts its children. Your own components' state resets too (a selected call, for example), not only what the hooks return. Keep any component whose state should survive a change of signed-in person outside the provider.
+
+### Documentation
+
+- **A new section, [The `userId` prop](https://github.com/shawn1130/karing-live#the-userid-prop).** It explains what the prop is for, what it is not, and how to choose its value.
+
 ## 0.1.1
 
 A patch release. No code changes are needed to upgrade:

@@ -23,11 +23,12 @@ const call = useCall(callId, { transcript: true });
 6. [Live transcripts](#live-transcripts)
 7. [Without React](#without-react)
 8. [Your token route](#your-token-route)
-9. [Connections, errors and retries](#connections-errors-and-retries)
-10. [Privacy and security](#privacy-and-security)
-11. [Bandwidth](#bandwidth)
-12. [API reference](#api-reference)
-13. [Releases](#releases)
+9. [The `userId` prop](#the-userid-prop)
+10. [Connections, errors and retries](#connections-errors-and-retries)
+11. [Privacy and security](#privacy-and-security)
+12. [Bandwidth](#bandwidth)
+13. [API reference](#api-reference)
+14. [Releases](#releases)
 
 ## How it works
 
@@ -76,23 +77,23 @@ export const POST = createTokenHandler({
 
 ### 2. Wrap your app
 
-`scope` says who is signed in and for which organization. When it changes (sign-out, another user, an organization switch), every live connection closes and nothing from before is shown again.
+Pass the signed-in user's id as `userId`. When it changes, everything inside the provider starts fresh: live connections close, the audio stops, and the components inside it lose the React state they held for the last person. It is not a credential and is never sent to Karing. [The `userId` prop](#the-userid-prop) explains it in full.
 
 ```tsx
 "use client";
 import type { ReactNode } from "react";
 import { KaringLiveProvider } from "@karing-ai/live/react";
 
-export function LiveCallsProvider({ userId, orgId, children }: { userId: string; orgId: string; children: ReactNode }) {
+export function LiveCallsProvider({ userId, children }: { userId: string; children: ReactNode }) {
   return (
-    <KaringLiveProvider token="/api/karing/token" scope={`${userId}:${orgId}`}>
+    <KaringLiveProvider token="/api/karing/token" userId={userId}>
       {children}
     </KaringLiveProvider>
   );
 }
 ```
 
-When a user signs out, unmount the provider or change its `scope`.
+When a user signs out, stop rendering the provider. Render it again with the next person's id when they sign in.
 
 ### 3. Show the board and listen
 
@@ -258,24 +259,92 @@ app.post("/api/karing/token", requireOwnOrgStaff, async (req, res) => {
 A token source in the browser can also be a function, if your app fetches tokens its own way:
 
 ```tsx
-<KaringLiveProvider scope={`${user.id}:${org.id}`} token={async () => (await api.post("/live-token")).data} />
+<KaringLiveProvider userId={user.id} token={async () => (await api.post("/live-token")).data} />
 ```
 
 A function is passed an `AbortSignal` that aborts when the package stops waiting (after 10 seconds, or when the connection closes); pass it on to your request if you can:
 
 ```tsx
 <KaringLiveProvider
-  scope={`${user.id}:${org.id}`}
+  userId={user.id}
   token={async (signal) => (await fetch("/api/live-token", { method: "POST", signal })).json()}
 />
 ```
+
+## The `userId` prop
+
+`userId` is a required prop on `KaringLiveProvider`: the id of the person signed in to your app right now. It tells the package **whose screen this is**, so that when that person changes, the previous person's hook state does not carry over, and their live connections and audio stop.
+
+### What it is for
+
+Live connections stay open on their own, and reconnect on their own. Your app's sign-out does not reach them.
+
+Picture a shared front-desk computer running your app as a single-page app:
+
+1. Alex signs in, opens the live board, picks a call and starts listening.
+2. Alex signs out, and Sam signs in on the same tab. The page does not reload.
+3. If nothing told the package, the board, the transcript and the audio meant for Alex would carry on in front of Sam. A later reconnect does ask your token route again, but by then Sam has already seen and heard them, and what was already on screen stays there.
+
+With `userId={user.id}`, the value changes from Alex's id to Sam's at step 2, and the package:
+
+- **remounts everything inside the provider.** The state your own components kept starts fresh, for example the call Alex picked.
+- **closes every live connection opened for Alex**, and stops the audio.
+- **never carries Alex's hook state over**, not even for a single render. Sam's new connections can of course show your organization's calls again.
+- **connects again for Sam.** The board hook, and each call hook that has a call id, asks your token route for a new token as it connects. A call selection that was cleared stays closed until someone picks a call.
+
+The reset covers the provider and everything inside it. It cannot clear what your app keeps elsewhere: in a parent component above the provider, a shared store, a query cache or browser storage. If any of those hold live-call data or a selected call, clear them yourself when the signed-in person changes.
+
+For each new connection to check Sam, the token has to be fetched again:
+- If `token` is your token route's URL, it is simply called again.
+- If you pass a function, it must fetch a new token for whoever is signed in now. Never return a token cached from an earlier sign-in.
+
+### What it is not
+
+**It is not access control, and it is never sent to Karing.** What a browser can see is decided on the server:
+
+- **Your token route's `authorize` check** decides which of your users get a token at all.
+- **Your API key's organization** decides which calls a token can open. Karing reads the organization from the signed token, never from `userId` or any other value the browser could change, so a token can only ever open your organization's calls.
+
+Whatever value you pass, it cannot widen what a token can open.
+
+### Choosing the value
+
+Use a string that stays the same while the same person is signed in, and changes when someone else signs in. Your user id does exactly that:
+
+| Your app | Use |
+| --- | --- |
+| One person per sign-in | `user.id` |
+| People can switch between organizations in your app | `` `${user.id}:${org.id}` `` |
+| Several people share one login | A non-secret id that changes on every sign-in. Not the session cookie, and not a token. |
+
+If your app limits staff to certain locations or teams, you can add those to the value, so switching also resets the screen. That does not limit which calls a token can open: every token opens all of your organization's live calls.
+
+Avoid these:
+
+| Value | What goes wrong |
+| --- | --- |
+| A constant, such as `"app"` | While the provider stays on screen, a constant can never signal that someone else signed in. |
+| A new value on each update, such as `String(Date.now())` | Each change resets everything: connections close and reopen, your token route is called again and again, and everything inside the provider is remounted. |
+| A token, cookie or other secret | It is only compared in the browser and never sent anywhere, but a secret has no reason to be there. |
+
+### Signing out
+
+While nobody is signed in, don't render the provider at all: unmounting it closes everything. Don't pass a placeholder such as `"anonymous"`. When the next person signs in, render it again with their id.
+
+### Without React
+
+`watchLiveCalls()` and `listenToCall()` have no `userId`. When the signed-in person changes:
+
+1. Call `close()` on every board and listener.
+2. Clear what your app kept from them: the list of calls, the transcript, who is speaking, and the selected call.
+3. Start new ones for the next person. Each one fetches a new token from your token route.
 
 ## Connections, errors and retries
 
 The package keeps connections open for you:
 
 - It gets a fresh token for every connection, and gives up on one that takes more than 10 seconds.
-- It reconnects straight away the first time Karing restarts a server, and otherwise after a growing, randomized delay of up to 30 seconds, so many browsers do not return at once.
+- When Karing closes a connection because it restarted a server or refused a token, the package retries straight away, as long as it has not already been retrying. (Its retry count goes back to zero once a connection has stayed open for more than a minute.) Every other retry waits a growing, randomized delay of up to 30 seconds, so many browsers do not return at once.
 - The board keeps trying for as long as it is open. A call gives up after a few failed attempts in a row.
 
 `status` is one of `"connecting"`, `"open"`, `"reconnecting"` or `"closed"`.
@@ -298,7 +367,7 @@ When a call simply ends, `useCall` sets `ended: true` and `listenToCall` calls `
 
 - **Your API key never leaves your server.** Keep it in server-only configuration (never a variable your bundler exposes to the browser, such as `NEXT_PUBLIC_…`), and import `@karing-ai/live/server` only from server code. If it is called in a browser by mistake it throws, as a reminder; that check cannot protect a key already shipped to a browser.
 - **Do not allow cross-origin requests to your token route.** With CORS off, other sites' JavaScript cannot read the tokens it returns.
-- **A token's minute limits new connections only.** A connection that is already open stays open until it ends: a board reconnects (with a new token) within the hour, and a call connection ends with the call or reconnects after four hours. Signing a user out in your app closes their connections in that browser (change `scope` or unmount the provider); it cannot reach a copy of a token used elsewhere.
+- **A token's minute limits new connections only.** A connection that is already open stays open until it ends: a board reconnects (with a new token) within the hour, and a call connection ends with the call or reconnects after four hours. Signing a user out in your app closes their connections in that browser (unmount the provider, or render it with the next person's id); it cannot reach a copy of a token used elsewhere.
 - **Live calls are protected health information.** The board includes callers' phone numbers, and calls include audio and transcripts. Show them only to people who need them. Do not record the audio or store transcripts unless your agreements allow it.
 - **Render transcripts as text.** React does this for you. Without React, set `textContent`, never `innerHTML`.
 - **Tokens are credentials.** Do not log or store them.
@@ -315,7 +384,7 @@ Every export has a description and examples in its type definitions, which your 
 
 | Export | What it is |
 | --- | --- |
-| `KaringLiveProvider` | Makes live calls available to the hooks below it. Props: `token` (your token route's URL, or a function) and `scope` (who is signed in, for which organization). |
+| `KaringLiveProvider` | Makes live calls available to the hooks below it. Props: `token` (your token route's URL, or a function) and `userId` (the id of the person signed in to your app; when it changes, everything inside the provider starts fresh; not a credential, never sent to Karing). |
 | `useLiveCalls()` | `{ calls, status, error }`: your organization's live calls. |
 | `useCall(callId, { transcript? })` | `{ status, speaking, transcript, audio, playAudio, stopAudio, ended, error }` for one call. |
 
